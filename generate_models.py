@@ -48,32 +48,55 @@ def find_image_folder(slug):
 
 def prepare_images(img_dir, slug):
     """
-    Ensure images in img_dir are named 1.ext, 2.ext, ...
-    Renames them if not already numbered (sorted alphabetically).
-    Returns (count, ext).
+    Ensure images in img_dir are:
+      1. Named 1.jpeg, 2.jpeg, ... (renamed if needed, sorted alphabetically)
+      2. Compressed as JPEG (quality 85, max 1500 px on longest side)
+    Skips processing if files are already numbered .jpeg (already done).
+    Returns (count, ext) — ext is always '.jpeg'.
     """
     from collections import Counter
+    from PIL import Image
+
+    MAX_PX  = 1500
+    QUALITY = 85
+
     files = sorted([f for f in os.listdir(img_dir) if f.lower().endswith(IMAGE_EXTS)])
     if not files:
         return 0, ".jpeg"
-    # Already numbered? (all basenames are pure digits)
-    if all(os.path.splitext(f)[0].isdigit() for f in files):
-        return len(files), os.path.splitext(files[0])[1].lower()
-    # Pick the most-common extension
-    ext_counts = Counter(os.path.splitext(f)[1].lower() for f in files)
-    target_ext = ext_counts.most_common(1)[0][0]
-    print("    Auto-renaming {} image(s) in images/{}/...".format(len(files), slug))
-    # Two-pass rename to avoid name collisions
-    tmp_names = []
-    for i, fname in enumerate(files):
+
+    # Already processed? (all numbered .jpeg files)
+    if all(os.path.splitext(f)[0].isdigit() and f.lower().endswith(".jpeg") for f in files):
+        return len(files), ".jpeg"
+
+    # ── Step 1: rename to numbered temp names ──────────────────────────────
+    if not all(os.path.splitext(f)[0].isdigit() for f in files):
+        ext_counts = Counter(os.path.splitext(f)[1].lower() for f in files)
+        tmp_ext = ext_counts.most_common(1)[0][0]
+        print("    Auto-renaming {} image(s) in images/{}/...".format(len(files), slug))
+        tmp_names = []
+        for i, fname in enumerate(files):
+            src = os.path.join(img_dir, fname)
+            tmp = os.path.join(img_dir, "__tmp_{:04d}{}".format(i, os.path.splitext(fname)[1].lower()))
+            os.rename(src, tmp)
+            tmp_names.append(tmp)
+        for i, tmp in enumerate(sorted(tmp_names), 1):
+            os.rename(tmp, os.path.join(img_dir, "{}{}".format(i, tmp_ext)))
+        files = sorted([f for f in os.listdir(img_dir) if f.lower().endswith(IMAGE_EXTS)])
+
+    # ── Step 2: compress to JPEG ────────────────────────────────────────────
+    print("    Compressing {} image(s) in images/{}/...".format(len(files), slug))
+    for fname in files:
         src = os.path.join(img_dir, fname)
-        tmp = os.path.join(img_dir, "__tmp_{:04d}{}".format(i, os.path.splitext(fname)[1].lower()))
-        os.rename(src, tmp)
-        tmp_names.append(tmp)
-    for i, tmp in enumerate(sorted(tmp_names), 1):
-        os.rename(tmp, os.path.join(img_dir, "{}{}".format(i, target_ext)))
-    print("    Renamed to 1{} \u2026 {}{}".format(target_ext, len(files), target_ext))
-    return len(files), target_ext
+        dst = os.path.join(img_dir, os.path.splitext(fname)[0] + ".jpeg")
+        with Image.open(src) as img:
+            img = img.convert("RGB")
+            if max(img.size) > MAX_PX:
+                img.thumbnail((MAX_PX, MAX_PX), Image.LANCZOS)
+            img.save(dst, "JPEG", quality=QUALITY, optimize=True)
+        if src != dst:
+            os.remove(src)
+    print("    Done. {} image(s) compressed to JPEG.".format(len(files)))
+    return len(files), ".jpeg"
 
 
 # ── Template: individual model page ─────────────────────────────────────────
