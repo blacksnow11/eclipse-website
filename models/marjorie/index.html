@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eclipse — Marjorie</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../assets/styles.css">
+</head>
+<body data-page="model" data-home-path="../.." data-model-slug="marjorie">
+    <nav class="site-nav">
+        <a id="back-to-gallery" class="nav-link" href="../../bsanvhbdahbhda/">&#8592; All Models</a>
+        <div class="nav-brand">E<em>C</em>LIPSE</div>
+        <div class="nav-spacer"></div>
+    </nav>
+
+    <main class="page-shell">
+        <section class="hero">
+            <div class="hero-grid">
+                <div class="hero-media">
+                    <img id="hero-image" src="../../images/marjorie/1.jpeg" alt="Marjorie">
+                </div>
+                <div class="hero-summary">
+                    <div>
+                        <div class="kicker">Private booking preview</div>
+                        <h1 id="hero-name" class="hero-name">Marjorie</h1>
+                        <div class="brand-divider" style="margin-left:0;margin-right:auto;"></div>
+                        <span id="hero-price" class="price-pill">Starting at $1,700</span>
+                    </div>
+
+                    <p id="hero-copy" class="hero-copy"></p>
+
+                    <div class="meta-grid">
+                        <div class="meta-card">
+                            <div class="meta-label">Area</div>
+                            <div id="meta-location" class="meta-value"></div>
+                        </div>
+                        <div class="meta-card">
+                            <div class="meta-label">ZIP</div>
+                            <div id="meta-zip" class="meta-value"></div>
+                        </div>
+                        <div class="meta-card">
+                            <div class="meta-label">Gallery</div>
+                            <div id="meta-gallery-count" class="meta-value"></div>
+                        </div>
+                    </div>
+
+                    <span id="hero-location" class="location-chip">Available near your area</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="actions-section">
+            <h2 class="section-title">Request Access</h2>
+            <p class="section-subtitle">Each action submits an anonymous request into the shared Circovault Supabase transaction database. No sign-in is required, and this site does <strong>not</strong> collect raw card numbers or CVV codes.</p>
+            <div id="actions-grid" class="actions-grid"></div>
+        </section>
+
+        <section class="gallery-section">
+            <h2 class="section-title">Gallery</h2>
+            <p class="section-subtitle">Browse the full set before you reveal contact details, request a video call, or submit a booking request.</p>
+            <div class="gallery-panel">
+                <div id="photo-grid" class="photo-grid"></div>
+            </div>
+        </section>
+    </main>
+
+    <footer id="page-footer" class="footer"></footer>
+
+    <div id="checkout-modal" class="modal" aria-hidden="true">
+        <div class="checkout-panel">
+            <button id="checkout-close" class="close-button" type="button" aria-label="Close">&#10005;</button>
+            <h2 class="modal-title">Secure Request</h2>
+            <p class="section-subtitle" style="text-align:left;margin:0.6rem 0 0;">No account is required. Enter the request details below and the site will submit them anonymously into the shared Circovault Supabase transaction database.</p>
+
+            <div class="checkout-summary">
+                <div class="summary-card">
+                    <div class="summary-label">Model</div>
+                    <div id="checkout-model" class="summary-value"></div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Action</div>
+                    <div id="checkout-action" class="summary-value"></div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Total</div>
+                    <div id="checkout-total" class="summary-value"></div>
+                </div>
+            </div>
+
+            <div class="message-box info" style="margin-top:1rem;">
+                Current location: <span id="checkout-location"></span>
+            </div>
+
+            <section class="step-panel" data-step="details">
+                <div class="step-heading">Step 1 — Booking Details</div>
+                <div class="message-box info">This request is submitted anonymously. Enter the best contact and area details so the transaction record is as complete as possible.</div>
+                <form id="details-form" class="form-stack">
+                    <div class="form-grid">
+                        <input id="billing-name" class="field" type="text" placeholder="Full name" required>
+                        <input id="billing-email" class="field" type="email" placeholder="Email address" required>
+                    </div>
+                    <input id="billing-address" class="field" type="text" placeholder="Street address (optional)">
+                    <div class="form-grid">
+                        <input id="billing-city" class="field" type="text" placeholder="City" required>
+                        <input id="billing-state" class="field" type="text" placeholder="State" required>
+                    </div>
+                    <div class="form-grid">
+                        <input id="billing-zip" class="field" type="text" placeholder="ZIP code" required>
+                        <input id="billing-country" class="field" type="text" placeholder="Country" value="US">
+                    </div>
+                    <textarea id="billing-notes" class="field" placeholder="Notes, preferred time, Telegram username, or booking details (optional)"></textarea>
+                    <div id="details-message" class="message-box hidden"></div>
+                    <div class="checkout-actions">
+                        <button id="checkout-button" class="btn" type="submit">Submit Request</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="step-panel" data-step="success" hidden>
+                <div class="step-heading">Step 2 — Request Submitted</div>
+                <div id="success-message" class="message-box success hidden"></div>
+                <div id="reveal-card" class="reveal-card hidden">
+                    <h4>Concierge Contact Revealed</h4>
+                    <a id="reveal-link" href="http://t.me/leon_ytwolf" target="_blank" rel="noopener noreferrer">Telegram: @leon_ytwolf</a>
+                </div>
+                <div class="checkout-actions">
+                    <button id="success-close" class="btn" type="button">Done</button>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <div id="lightbox" class="lightbox" aria-hidden="true">
+        <button id="lightbox-close" class="lightbox-close" type="button" aria-label="Close">&#10005;</button>
+        <button id="lightbox-prev" class="lightbox-nav prev" type="button" aria-label="Previous">&#8249;</button>
+        <div class="lightbox-content">
+            <img id="lightbox-image" class="lightbox-image" src="" alt="">
+        </div>
+        <button id="lightbox-next" class="lightbox-nav next" type="button" aria-label="Next">&#8250;</button>
+        <div id="lightbox-counter" class="lightbox-counter"></div>
+    </div>
+
+    <script src="../../assets/models-data.js"></script>
+    <script type="module" src="../../assets/site.js"></script>
+</body>
+</html>

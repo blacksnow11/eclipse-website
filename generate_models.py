@@ -1,1024 +1,2015 @@
 #!/usr/bin/env python3
-import json, os
+from __future__ import annotations
 
-BASE     = "/Users/mac/eclipse-website"
+import hashlib
+import json
+import re
+import shutil
+from pathlib import Path
+
+BASE = Path(__file__).resolve().parent
+IMAGES_DIR = BASE / "images"
+MODELS_DIR = BASE / "models"
+ASSETS_DIR = BASE / "assets"
+HOME_PATH = BASE / "index.html"
+GALLERY_DIR = BASE / "bsanvhbdahbhda"
+EXTERNAL_MODELS_DIR = Path("/Users/mac/Downloads/model")
+
 PASSWORD = "eclipsecompanions"
+GALLERY_SLUG = "bsanvhbdahbhda"
+CONTACT_URL = "http://t.me/leon_ytwolf"
+CONTACT_LABEL = "Telegram: @leon_ytwolf"
+CHECKOUT_ENDPOINT = "https://zuyxjzobvwnwvrjzxqqd.supabase.co/functions/v1/anonymous-checkout"
+IMAGE_EXTS = {".jpeg", ".jpg", ".png", ".webp"}
 
-# ── Known models (slug, display name, starting price, photo count) ────────────
-models = [
-    ("sophia",    "Sophia",    700,   5),
-    ("isabella",  "Isabella",  500,   3),
-    ("valentina", "Valentina", 900,   5),
-    ("camila",    "Camila",    900,   4),
-    ("aaliyah",   "Aaliyah",   600,   5),
-    ("jasmine",   "Jasmine",   900,   7),
-    ("gabrielle", "Gabrielle", 1400,  8),
-    ("luna",      "Luna",      500,   9),
-    ("serena",    "Serena",    1200, 10),
-    ("naomi",     "Naomi",     800,   7),
-    ("zara",      "Zara",      400,   6),
-    ("kehlani",   "Kehlani",   650,   9),
-]
+DISPLAY_OVERRIDES = {
+    "aaliyah": "Aaliyah",
+    "annabelle": "Annabelle",
+    "camila": "Camila",
+    "deshawn": "Deshawn",
+    "eleanor": "Eleanor",
+    "emma": "Emma",
+    "fray": "Fray",
+    "gabrielle": "Gabrielle",
+    "imani": "Imani",
+    "isabella": "Isabella",
+    "jasmine": "Jasmine",
+    "kehlani": "Kehlani",
+    "lily": "Lily",
+    "luna": "Luna",
+    "maskedayana": "Masked Ayana",
+    "naomi": "Naomi",
+    "nia": "Nia",
+    "olivia": "Olivia",
+    "serena": "Serena",
+    "sophia": "Sophia",
+    "valentina": "Valentina",
+    "zara": "Zara",
+}
 
-model_lookup = {slug: (name, price, count) for slug, name, price, count in models}
+PRICE_OVERRIDES = {
+    "sophia": 700,
+    "isabella": 500,
+    "valentina": 900,
+    "camila": 900,
+    "aaliyah": 600,
+    "jasmine": 900,
+    "gabrielle": 1400,
+    "luna": 500,
+    "serena": 1200,
+    "naomi": 800,
+    "zara": 700,
+    "kehlani": 700,
+    "annabelle": 1100,
+    "deshawn": 900,
+    "eleanor": 1300,
+    "emma": 1000,
+    "fray": 1200,
+    "imani": 900,
+    "lily": 800,
+    "maskedayana": 1500,
+    "nia": 900,
+    "olivia": 1000,
+}
 
-IMAGE_EXTS = (".jpeg", ".jpg", ".png", ".webp")
+STYLE_CSS = r'''
+:root {
+    --bg: #0c0c0c;
+    --bg-elevated: #111111;
+    --card-bg: #151515;
+    --card-bg-soft: #181818;
+    --border: #262626;
+    --border-strong: #353535;
+    --gold: #c9a455;
+    --gold-light: #e8c978;
+    --gold-soft: rgba(201, 164, 85, 0.12);
+    --text: #ffffff;
+    --muted: #8b8b8b;
+    --danger: #e26a6a;
+    --success: #8dd49b;
+    --shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+}
 
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
 
-def sanitize_slug(raw):
-    """Normalize to a clean URL-safe slug (lowercase, no spaces)."""
-    return raw.strip().lower().replace(" ", "")
+html {
+    scroll-behavior: smooth;
+}
 
+body {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Montserrat', 'Segoe UI', sans-serif;
+    position: relative;
+}
 
-def find_image_folder(slug):
-    """
-    Locate the images/<folder> directory for a slug, handling
-    case differences and spaces in folder names.
-    Returns the full path, or None if not found.
-    """
-    images_dir = os.path.join(BASE, "images")
-    exact = os.path.join(images_dir, slug)
-    if os.path.isdir(exact):
-        return exact
-    for d in os.listdir(images_dir):
-        if d.lower().replace(" ", "") == slug:
-            return os.path.join(images_dir, d)
-    return None
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    background: radial-gradient(ellipse at 50% 18%, #1e130a 0%, #0c0c0c 62%);
+}
 
+body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.45;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+}
 
-def prepare_images(img_dir, slug):
-    """
-    Ensure images in img_dir are:
-      1. Named 1.jpeg, 2.jpeg, ... (renamed if needed, sorted alphabetically)
-      2. Compressed as JPEG (quality 85, max 1500 px on longest side)
-    Skips processing if files are already numbered .jpeg (already done).
-    Returns (count, ext) — ext is always '.jpeg'.
-    """
-    from collections import Counter
-    from PIL import Image
+a {
+    color: inherit;
+}
 
-    MAX_PX  = 1500
-    QUALITY = 85
+button,
+input,
+textarea,
+select {
+    font: inherit;
+}
 
-    files = sorted([f for f in os.listdir(img_dir) if f.lower().endswith(IMAGE_EXTS)])
-    if not files:
-        return 0, ".jpeg"
+button {
+    border: 0;
+    cursor: pointer;
+}
 
-    # Already processed? (all numbered .jpeg files)
-    if all(os.path.splitext(f)[0].isdigit() and f.lower().endswith(".jpeg") for f in files):
-        return len(files), ".jpeg"
+img {
+    max-width: 100%;
+    display: block;
+}
 
-    # ── Step 1: rename to numbered temp names ──────────────────────────────
-    if not all(os.path.splitext(f)[0].isdigit() for f in files):
-        ext_counts = Counter(os.path.splitext(f)[1].lower() for f in files)
-        tmp_ext = ext_counts.most_common(1)[0][0]
-        print("    Auto-renaming {} image(s) in images/{}/...".format(len(files), slug))
-        tmp_names = []
-        for i, fname in enumerate(files):
-            src = os.path.join(img_dir, fname)
-            tmp = os.path.join(img_dir, "__tmp_{:04d}{}".format(i, os.path.splitext(fname)[1].lower()))
-            os.rename(src, tmp)
-            tmp_names.append(tmp)
-        for i, tmp in enumerate(sorted(tmp_names), 1):
-            os.rename(tmp, os.path.join(img_dir, "{}{}".format(i, tmp_ext)))
-        files = sorted([f for f in os.listdir(img_dir) if f.lower().endswith(IMAGE_EXTS)])
+.page-shell {
+    width: min(1240px, calc(100% - 2rem));
+    margin: 0 auto;
+}
 
-    # ── Step 2: compress to JPEG ────────────────────────────────────────────
-    print("    Compressing {} image(s) in images/{}/...".format(len(files), slug))
-    for fname in files:
-        src = os.path.join(img_dir, fname)
-        dst = os.path.join(img_dir, os.path.splitext(fname)[0] + ".jpeg")
-        with Image.open(src) as img:
-            img = img.convert("RGB")
-            if max(img.size) > MAX_PX:
-                img.thumbnail((MAX_PX, MAX_PX), Image.LANCZOS)
-            img.save(dst, "JPEG", quality=QUALITY, optimize=True)
-        if src != dst:
-            os.remove(src)
-    print("    Done. {} image(s) compressed to JPEG.".format(len(files)))
-    return len(files), ".jpeg"
+.center-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+}
 
+.access-card,
+.panel,
+.checkout-panel {
+    width: min(540px, 100%);
+    background: rgba(15, 15, 15, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: var(--shadow);
+    border-radius: 28px;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}
 
-# ── Template: individual model page ─────────────────────────────────────────
-MODEL_TEMPLATE = r"""<!DOCTYPE html>
+.access-card {
+    padding: 2.5rem 2rem;
+}
+
+.brand,
+.nav-brand,
+.site-brand,
+.hero-name,
+.section-title,
+.model-card-name,
+.modal-title {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+}
+
+.brand,
+.site-brand,
+.nav-brand {
+    text-transform: uppercase;
+    font-weight: 300;
+    letter-spacing: 0.45em;
+    padding-right: 0.45em;
+}
+
+.brand {
+    font-size: clamp(2.8rem, 10vw, 5rem);
+    text-align: center;
+}
+
+.brand em,
+.site-brand em,
+.nav-brand em,
+.hero-name em {
+    font-style: normal;
+    color: var(--gold);
+}
+
+.brand-divider,
+.section-divider,
+.header-divider {
+    width: 88px;
+    height: 1px;
+    margin: 1.4rem auto 1.5rem;
+    background: linear-gradient(to right, transparent, var(--gold), transparent);
+}
+
+.access-subtitle,
+.kicker,
+.meta-line,
+.eyebrow,
+.location-chip,
+.footer,
+.nav-link,
+.price-pill,
+.action-price,
+.small-note,
+.site-tagline {
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+}
+
+.access-subtitle,
+.site-tagline,
+.small-note,
+.meta-line,
+.footer,
+.location-chip {
+    color: var(--muted);
+}
+
+.access-subtitle,
+.site-tagline {
+    text-align: center;
+    font-size: 0.72rem;
+    line-height: 1.9;
+}
+
+.contact-link {
+    color: var(--gold);
+    text-decoration: none;
+}
+
+.contact-link:hover {
+    color: var(--gold-light);
+}
+
+.step {
+    display: none;
+}
+
+.step.active {
+    display: block;
+}
+
+.form-stack {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.field,
+textarea.field {
+    width: 100%;
+    background: #171717;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 16px;
+    padding: 1rem 1.05rem;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+textarea.field {
+    min-height: 110px;
+    resize: vertical;
+}
+
+.field:focus,
+textarea.field:focus {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(201, 164, 85, 0.12);
+}
+
+.field::placeholder,
+textarea.field::placeholder {
+    color: #575757;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.btn,
+.btn-secondary,
+.action-button,
+.auth-tab {
+    border-radius: 999px;
+    transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.btn,
+.action-button {
+    background: var(--gold);
+    color: #0c0c0c;
+    font-weight: 700;
+    padding: 1rem 1.2rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+}
+
+.btn:hover,
+.action-button:hover {
+    background: var(--gold-light);
+    transform: translateY(-1px);
+}
+
+.btn-secondary,
+.auth-tab {
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    padding: 0.95rem 1.2rem;
+}
+
+.btn-secondary:hover,
+.auth-tab:hover {
+    border-color: var(--gold);
+    color: var(--gold-light);
+}
+
+.auth-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.auth-tab.active {
+    background: var(--gold-soft);
+    border-color: rgba(201, 164, 85, 0.55);
+    color: var(--gold-light);
+}
+
+.message-box {
+    margin-top: 1rem;
+    padding: 0.95rem 1rem;
+    border-radius: 16px;
+    font-size: 0.92rem;
+    line-height: 1.65;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.message-box.error {
+    color: #ffd5d5;
+    border-color: rgba(226, 106, 106, 0.38);
+    background: rgba(226, 106, 106, 0.12);
+}
+
+.message-box.success {
+    color: #d9ffe0;
+    border-color: rgba(141, 212, 155, 0.32);
+    background: rgba(141, 212, 155, 0.12);
+}
+
+.message-box.info {
+    color: #f6f0de;
+    border-color: rgba(201, 164, 85, 0.28);
+    background: rgba(201, 164, 85, 0.1);
+}
+
+.loading-text {
+    opacity: 0.75;
+}
+
+.site-header {
+    text-align: center;
+    padding: 4.5rem 1rem 2rem;
+}
+
+.site-brand {
+    font-size: clamp(2rem, 6vw, 3.6rem);
+}
+
+.header-actions {
+    margin-top: 1.4rem;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+}
+
+.location-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.85rem 1.1rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.66rem;
+}
+
+.heading-block {
+    text-align: center;
+    margin-bottom: 2.25rem;
+}
+
+.heading-block h1,
+.heading-block h2 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: clamp(2.4rem, 7vw, 4.4rem);
+    font-weight: 300;
+    letter-spacing: 0.08em;
+    line-height: 1;
+}
+
+.heading-block p {
+    max-width: 760px;
+    margin: 1rem auto 0;
+    color: var(--muted);
+    line-height: 1.8;
+}
+
+.models-section {
+    padding: 1rem 0 5rem;
+}
+
+.models-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1.35rem;
+}
+
+.model-card {
+    position: relative;
+    display: block;
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    border-radius: 24px;
+    background: var(--card-bg);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    text-decoration: none;
+    transition: transform 0.32s ease, border-color 0.32s ease, box-shadow 0.32s ease;
+}
+
+.model-card:hover {
+    transform: translateY(-7px);
+    border-color: rgba(201, 164, 85, 0.52);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65);
+}
+
+.model-card-photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
+    transition: transform 0.45s ease;
+}
+
+.model-card:hover .model-card-photo {
+    transform: scale(1.04);
+}
+
+.model-card-overlay {
+    position: absolute;
+    inset: auto 0 0 0;
+    padding: 2.2rem 1.2rem 1.2rem;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.94) 0%, rgba(0, 0, 0, 0.56) 58%, transparent 100%);
+}
+
+.model-card-name {
+    font-size: 1.8rem;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+}
+
+.model-card-meta {
+    margin-top: 0.35rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.model-card-price {
+    color: var(--gold);
+    font-size: 0.8rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+}
+
+.model-card-tag {
+    color: var(--muted);
+    font-size: 0.68rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+}
+
+.randomizer-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+}
+
+.site-nav {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(12, 12, 12, 0.82);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+
+.nav-link {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.7rem;
+}
+
+.nav-link:hover {
+    color: var(--gold-light);
+}
+
+.nav-brand {
+    font-size: 1.35rem;
+}
+
+.nav-spacer {
+    width: 140px;
+}
+
+.hero {
+    padding: 1.2rem 0 0;
+}
+
+.hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+    gap: 1.5rem;
+    align-items: stretch;
+}
+
+.hero-media,
+.hero-summary,
+.gallery-panel,
+.action-card {
+    background: rgba(18, 18, 18, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+.hero-media {
+    min-height: 560px;
+}
+
+.hero-media img {
+    width: 100%;
+    height: 100%;
+    min-height: 560px;
+    object-fit: cover;
+    object-position: top center;
+}
+
+.hero-summary {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 1.5rem;
+}
+
+.kicker {
+    color: var(--gold);
+    font-size: 0.72rem;
+}
+
+.hero-name {
+    font-size: clamp(3rem, 7vw, 5.2rem);
+    font-weight: 300;
+    letter-spacing: 0.08em;
+    line-height: 0.95;
+}
+
+.hero-copy {
+    color: #d8d8d8;
+    line-height: 1.9;
+    max-width: 38rem;
+}
+
+.price-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    align-self: flex-start;
+    padding: 0.95rem 1.15rem;
+    border-radius: 999px;
+    color: var(--gold-light);
+    background: rgba(201, 164, 85, 0.12);
+    border: 1px solid rgba(201, 164, 85, 0.24);
+    font-size: 0.72rem;
+}
+
+.meta-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.meta-card {
+    padding: 1rem;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.meta-label {
+    color: var(--muted);
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+}
+
+.meta-value {
+    margin-top: 0.55rem;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.actions-section,
+.gallery-section {
+    padding: 2rem 0 5rem;
+}
+
+.section-title {
+    text-align: center;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 300;
+    letter-spacing: 0.1em;
+}
+
+.section-subtitle {
+    text-align: center;
+    color: var(--muted);
+    max-width: 760px;
+    margin: 0.9rem auto 0;
+    line-height: 1.85;
+}
+
+.actions-grid {
+    margin-top: 2rem;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.action-card {
+    padding: 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.action-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.action-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.action-price {
+    color: var(--gold);
+    font-size: 0.74rem;
+    white-space: nowrap;
+}
+
+.action-copy {
+    color: var(--muted);
+    line-height: 1.75;
+    font-size: 0.95rem;
+}
+
+.gallery-panel {
+    padding: 1.2rem;
+}
+
+.photo-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.9rem;
+}
+
+.photo-item {
+    position: relative;
+    aspect-ratio: 3 / 4;
+    border-radius: 22px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: var(--card-bg-soft);
+    cursor: pointer;
+}
+
+.photo-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
+    transition: transform 0.38s ease;
+}
+
+.photo-item:hover img {
+    transform: scale(1.04);
+}
+
+.photo-item::after {
+    content: '+';
+    position: absolute;
+    inset: auto 1rem 1rem auto;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: var(--gold-light);
+    font-size: 1.2rem;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(201, 164, 85, 0.42);
+    opacity: 0;
+    transform: scale(0.85);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.photo-item:hover::after {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.modal,
+.lightbox {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 110;
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.modal.active,
+.lightbox.active {
+    display: flex;
+}
+
+.checkout-panel {
+    position: relative;
+    width: min(720px, 100%);
+    max-height: min(90vh, 920px);
+    overflow: auto;
+    padding: 1.6rem;
+}
+
+.close-button,
+.lightbox-close,
+.lightbox-nav {
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text);
+}
+
+.close-button {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    width: 42px;
+    height: 42px;
+}
+
+.modal-title {
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 300;
+    letter-spacing: 0.08em;
+}
+
+.checkout-summary {
+    margin-top: 1rem;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.summary-card {
+    padding: 1rem;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.summary-label {
+    color: var(--muted);
+    font-size: 0.68rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+}
+
+.summary-value {
+    margin-top: 0.45rem;
+    line-height: 1.5;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.step-panel {
+    margin-top: 1.4rem;
+}
+
+.step-panel[hidden] {
+    display: none !important;
+}
+
+.step-heading {
+    font-size: 0.82rem;
+    color: var(--gold-light);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    margin-bottom: 0.9rem;
+}
+
+.field-hint {
+    margin-top: 0.65rem;
+    color: var(--muted);
+    font-size: 0.88rem;
+    line-height: 1.65;
+}
+
+.checkout-actions {
+    margin-top: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+}
+
+.reveal-card {
+    margin-top: 1rem;
+    padding: 1rem 1.1rem;
+    border-radius: 18px;
+    border: 1px solid rgba(141, 212, 155, 0.28);
+    background: rgba(141, 212, 155, 0.08);
+}
+
+.reveal-card h4 {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--success);
+}
+
+.reveal-card a {
+    display: inline-block;
+    margin-top: 0.55rem;
+    color: var(--text);
+    text-decoration: none;
+    font-size: 1rem;
+}
+
+.lightbox {
+    z-index: 120;
+}
+
+.lightbox-content {
+    position: relative;
+    width: min(92vw, 1100px);
+    height: min(88vh, 860px);
+    display: grid;
+    place-items: center;
+}
+
+.lightbox-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 22px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.72);
+}
+
+.lightbox-close {
+    position: fixed;
+    top: 1.2rem;
+    right: 1.2rem;
+    width: 42px;
+    height: 42px;
+    z-index: 2;
+}
+
+.lightbox-nav {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 54px;
+    height: 54px;
+    font-size: 1.6rem;
+    z-index: 2;
+}
+
+.lightbox-nav.prev {
+    left: 1rem;
+}
+
+.lightbox-nav.next {
+    right: 1rem;
+}
+
+.lightbox-counter {
+    position: fixed;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+}
+
+.footer {
+    text-align: center;
+    padding: 2rem 1rem 2.5rem;
+    font-size: 0.62rem;
+    line-height: 2;
+}
+
+@media (max-width: 1024px) {
+    .hero-grid,
+    .actions-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .hero-media,
+    .hero-media img {
+        min-height: 420px;
+    }
+}
+
+@media (max-width: 760px) {
+    .form-grid,
+    .photo-grid,
+    .meta-grid,
+    .checkout-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .photo-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .site-nav {
+        grid-template-columns: 1fr;
+        justify-items: center;
+        text-align: center;
+    }
+
+    .nav-spacer {
+        display: none;
+    }
+
+    .hero-summary,
+    .checkout-panel,
+    .access-card {
+        padding: 1.35rem;
+    }
+}
+
+@media (max-width: 520px) {
+    .page-shell {
+        width: min(100% - 1rem, 1240px);
+    }
+
+    .photo-grid,
+    .models-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .lightbox-nav.prev {
+        left: 0.55rem;
+    }
+
+    .lightbox-nav.next {
+        right: 0.55rem;
+    }
+}
+'''
+
+SITE_JS = r'''
+const SITE = window.ECLIPSE_SITE_DATA;
+const AUTH_KEY = 'eclipse_auth';
+const LOCATION_KEY = 'eclipse_location';
+const SELECTION_KEY = 'eclipse_selection';
+
+let lightboxState = { photos: [], index: 0 };
+
+function $(selector, root = document) {
+    return root.querySelector(selector);
+}
+
+function $all(selector, root = document) {
+    return Array.from(root.querySelectorAll(selector));
+}
+
+function formatCurrency(value) {
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0,
+    }).format(value);
+}
+
+function escapeHtml(value = '') {
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+function setAuth(value) {
+    sessionStorage.setItem(AUTH_KEY, value ? 'true' : 'false');
+}
+
+function isAuthed() {
+    return sessionStorage.getItem(AUTH_KEY) === 'true';
+}
+
+function getLocation() {
+    try {
+        return JSON.parse(sessionStorage.getItem(LOCATION_KEY) || 'null');
+    } catch {
+        return null;
+    }
+}
+
+function setLocation(data) {
+    sessionStorage.setItem(LOCATION_KEY, JSON.stringify(data));
+}
+
+function getSelection() {
+    try {
+        return JSON.parse(sessionStorage.getItem(SELECTION_KEY) || '[]');
+    } catch {
+        return [];
+    }
+}
+
+function setSelection(slugs) {
+    sessionStorage.setItem(SELECTION_KEY, JSON.stringify(slugs));
+}
+
+function clearSelection() {
+    sessionStorage.removeItem(SELECTION_KEY);
+}
+
+function getHomePath() {
+    return document.body.dataset.homePath || '.';
+}
+
+function goHome() {
+    window.location.replace(`${getHomePath()}/`);
+}
+
+function requirePrivateAccess() {
+    if (!isAuthed()) {
+        goHome();
+        return false;
+    }
+    return true;
+}
+
+function requireLocation() {
+    const location = getLocation();
+    if (!location) {
+        goHome();
+        return null;
+    }
+    return location;
+}
+
+function titleCaseSlug(slug) {
+    return slug
+        .replace(/-/g, ' ')
+        .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function getModel(slug) {
+    return SITE.models.find((model) => model.slug === slug) || null;
+}
+
+function shuffle(items) {
+    const copy = [...items];
+    for (let index = copy.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+    }
+    return copy;
+}
+
+function randomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function buildRandomSelection() {
+    const min = Math.min(8, SITE.models.length);
+    const max = Math.min(14, SITE.models.length);
+    const count = SITE.models.length <= min ? SITE.models.length : randomInt(min, max);
+    const selection = shuffle(SITE.models).slice(0, count).map((model) => model.slug);
+    setSelection(selection);
+    return selection;
+}
+
+async function lookupZip(zipcode) {
+    const response = await fetch(`https://api.zippopotam.us/us/${zipcode}`);
+    if (!response.ok) {
+        throw new Error('We could not find that ZIP code.');
+    }
+
+    const data = await response.json();
+    const place = data.places && data.places[0];
+
+    if (!place) {
+        throw new Error('We could not determine your location from that ZIP code.');
+    }
+
+    return {
+        zip: zipcode,
+        city: place['place name'],
+        state: place['state abbreviation'],
+        stateName: place.state,
+        country: data.country,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        label: `${place['place name']}, ${place['state abbreviation']}`,
+        preciseLabel: `${place['place name']}, ${place.state}`,
+    };
+}
+
+function setMessage(target, text, type = 'info') {
+    if (!target) return;
+    target.textContent = text || '';
+    target.className = `message-box ${type}`;
+    target.classList.toggle('hidden', !text);
+}
+
+function renderFooter() {
+    return `&copy; 2026 Eclipse &mdash; Private Access Only<br><a class="contact-link" href="${SITE.settings.contactUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(SITE.settings.contactLabel)}</a>`;
+}
+
+function initHomePage() {
+    const passwordStep = $('#password-step');
+    const zipStep = $('#zip-step');
+    const passwordForm = $('#password-form');
+    const zipForm = $('#zip-form');
+    const passwordInput = $('#password-input');
+    const zipInput = $('#zip-input');
+    const passwordMessage = $('#password-message');
+    const zipMessage = $('#zip-message');
+    const footer = $('#page-footer');
+
+    if (footer) {
+        footer.innerHTML = renderFooter();
+    }
+
+    const currentLocation = getLocation();
+    if (isAuthed() && currentLocation) {
+        window.location.replace(`./${SITE.settings.gallerySlug}/`);
+        return;
+    }
+
+    if (isAuthed()) {
+        passwordStep.classList.remove('active');
+        zipStep.classList.add('active');
+        zipInput.focus();
+    } else {
+        passwordStep.classList.add('active');
+        zipStep.classList.remove('active');
+        passwordInput.focus();
+    }
+
+    passwordForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        if (passwordInput.value === SITE.settings.password) {
+            setAuth(true);
+            setMessage(passwordMessage, '');
+            passwordStep.classList.remove('active');
+            zipStep.classList.add('active');
+            zipInput.focus();
+        } else {
+            setMessage(passwordMessage, 'Incorrect password. Please try again.', 'error');
+            passwordInput.value = '';
+            passwordInput.focus();
+        }
+    });
+
+    zipForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const zip = zipInput.value.trim();
+        if (!/^\d{5}$/.test(zip)) {
+            setMessage(zipMessage, 'Please enter a valid 5-digit ZIP code.', 'error');
+            return;
+        }
+
+        const submitButton = $('button[type="submit"]', zipForm);
+        submitButton.disabled = true;
+        submitButton.textContent = 'Locating...';
+        setMessage(zipMessage, 'Finding your local lineup…', 'info');
+
+        try {
+            const location = await lookupZip(zip);
+            setLocation(location);
+            clearSelection();
+            buildRandomSelection();
+            window.location.replace(`./${SITE.settings.gallerySlug}/`);
+        } catch (error) {
+            setMessage(zipMessage, error.message || 'Unable to look up that ZIP code.', 'error');
+        } finally {
+            submitButton.disabled = false;
+            submitButton.textContent = 'See Models Near Me';
+        }
+    });
+}
+
+function modelCardMarkup(model, location) {
+    return `
+        <a class="model-card" href="../models/${model.slug}/">
+            <img class="model-card-photo" src="../images/${model.slug}/${model.cover}" alt="${escapeHtml(model.name)}" loading="lazy">
+            <div class="model-card-overlay">
+                <div class="model-card-name">${escapeHtml(model.name)}</div>
+                <div class="model-card-meta">
+                    <div class="model-card-price">From ${formatCurrency(model.price)}</div>
+                    <div class="model-card-tag">${escapeHtml(location.state)}</div>
+                </div>
+            </div>
+        </a>
+    `;
+}
+
+function initGalleryPage() {
+    if (!requirePrivateAccess()) return;
+    const location = requireLocation();
+    if (!location) return;
+
+    const footer = $('#page-footer');
+    const locationLabel = $('#gallery-location');
+    const title = $('#gallery-title');
+    const copy = $('#gallery-copy');
+    const grid = $('#gallery-grid');
+    const shuffleButton = $('#shuffle-models');
+    const updateZipButton = $('#change-zip');
+
+    if (footer) {
+        footer.innerHTML = renderFooter();
+    }
+
+    locationLabel.textContent = `Available near ${location.label}`;
+    title.textContent = `Here are the models in your area — ${location.label}`;
+    copy.textContent = `We matched this lineup using ZIP code ${location.zip}. Because the site is curated dynamically, you’ll see a fresh mix of ${location.city}-area availability each session.`;
+
+    function renderSelection() {
+        const slugs = getSelection().length ? getSelection() : buildRandomSelection();
+        const models = slugs.map(getModel).filter(Boolean);
+        grid.innerHTML = models.map((model) => modelCardMarkup(model, location)).join('');
+    }
+
+    renderSelection();
+
+    shuffleButton.addEventListener('click', () => {
+        buildRandomSelection();
+        renderSelection();
+    });
+
+    updateZipButton.addEventListener('click', () => {
+        sessionStorage.removeItem(LOCATION_KEY);
+        clearSelection();
+        window.location.replace('../');
+    });
+}
+
+function setupLightbox() {
+    const lightbox = $('#lightbox');
+    if (!lightbox) return;
+
+    const image = $('#lightbox-image');
+    const counter = $('#lightbox-counter');
+    const closeButton = $('#lightbox-close');
+    const prevButton = $('#lightbox-prev');
+    const nextButton = $('#lightbox-next');
+
+    function renderLightbox() {
+        const currentPhoto = lightboxState.photos[lightboxState.index];
+        if (!currentPhoto) return;
+        image.src = currentPhoto.src;
+        image.alt = currentPhoto.alt;
+        counter.textContent = `${lightboxState.index + 1} — ${lightboxState.photos.length}`;
+    }
+
+    window.__openLightbox = function (photos, index) {
+        lightboxState = { photos, index };
+        renderLightbox();
+        lightbox.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    };
+
+    function closeLightbox() {
+        lightbox.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    function moveLightbox(delta) {
+        if (!lightboxState.photos.length) return;
+        lightboxState.index = (lightboxState.index + delta + lightboxState.photos.length) % lightboxState.photos.length;
+        renderLightbox();
+    }
+
+    closeButton.addEventListener('click', closeLightbox);
+    prevButton.addEventListener('click', () => moveLightbox(-1));
+    nextButton.addEventListener('click', () => moveLightbox(1));
+    lightbox.addEventListener('click', (event) => {
+        if (event.target === lightbox) closeLightbox();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (!lightbox.classList.contains('active')) return;
+        if (event.key === 'Escape') closeLightbox();
+        if (event.key === 'ArrowLeft') moveLightbox(-1);
+        if (event.key === 'ArrowRight') moveLightbox(1);
+    });
+}
+
+function fillCheckoutSummary(action, model, location) {
+    const amount = action.pricing === 'model' ? model.price : action.amount;
+    $('#checkout-model').textContent = model.name;
+    $('#checkout-action').textContent = action.label;
+    $('#checkout-total').textContent = formatCurrency(amount);
+    $('#checkout-location').textContent = location.label;
+}
+
+function showCheckoutStep(stepName) {
+    $all('[data-step]').forEach((element) => {
+        element.hidden = element.dataset.step !== stepName;
+    });
+}
+
+function initCheckout(model, location) {
+    const modal = $('#checkout-modal');
+    if (!modal) return;
+
+    const closeButton = $('#checkout-close');
+    const detailsMessage = $('#details-message');
+    const successMessage = $('#success-message');
+    const revealCard = $('#reveal-card');
+    const revealLink = $('#reveal-link');
+    const detailsForm = $('#details-form');
+    const successCloseButton = $('#success-close');
+
+    let currentAction = null;
+
+    function collectDetails() {
+        const details = {
+            billingName: $('#billing-name').value.trim(),
+            billingEmail: $('#billing-email').value.trim(),
+            billingAddress: $('#billing-address').value.trim(),
+            billingCity: $('#billing-city').value.trim(),
+            billingState: $('#billing-state').value.trim(),
+            billingZip: $('#billing-zip').value.trim(),
+            billingCountry: $('#billing-country').value.trim(),
+            notes: $('#billing-notes').value.trim(),
+        };
+
+        if (!details.billingName || !details.billingEmail || !details.billingCity || !details.billingState || !details.billingZip) {
+            throw new Error('Please complete the required booking details.');
+        }
+
+        return details;
+    }
+
+    async function submitTransaction(details) {
+        const amount = currentAction.pricing === 'model' ? model.price : currentAction.amount;
+        const payload = {
+            actionKey: currentAction.key,
+            actionLabel: currentAction.label,
+            amount,
+            modelSlug: model.slug,
+            modelName: model.name,
+            location,
+            ...details,
+            sourceUrl: window.location.href,
+        };
+
+        const response = await fetch(SITE.settings.checkoutEndpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+
+        let data = {};
+        try {
+            data = await response.json();
+        } catch {
+            data = {};
+        }
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Unable to submit your request right now.');
+        }
+
+        if (currentAction.key === 'reveal_contact') {
+            revealCard.classList.remove('hidden');
+            setMessage(successMessage, 'Your contact reveal request was submitted successfully. The concierge contact is now visible below.', 'success');
+        } else {
+            const requestLabel = data.requestId ? ` Request ID: ${data.requestId}.` : '';
+            setMessage(successMessage, `Your ${currentAction.label.toLowerCase()} request for ${model.name} was submitted successfully.${requestLabel}`, 'success');
+        }
+
+        showCheckoutStep('success');
+    }
+
+    async function openModal(action) {
+        currentAction = action;
+        fillCheckoutSummary(action, model, location);
+        setMessage(detailsMessage, '');
+        setMessage(successMessage, '');
+        revealCard.classList.add('hidden');
+        revealLink.href = SITE.settings.contactUrl;
+        revealLink.textContent = SITE.settings.contactLabel;
+        $('#billing-city').value = location.city;
+        $('#billing-state').value = location.state;
+        $('#billing-zip').value = location.zip;
+        $('#billing-country').value = 'US';
+        $('#billing-name').value = $('#billing-name').value || '';
+        $('#billing-email').value = $('#billing-email').value || '';
+        $('#checkout-button').textContent = `Submit ${action.label} Request`;
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        showCheckoutStep('details');
+    }
+
+    function closeModal() {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    closeButton.addEventListener('click', closeModal);
+    successCloseButton.addEventListener('click', closeModal);
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) closeModal();
+    });
+
+    detailsForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const submit = $('#checkout-button');
+        submit.disabled = true;
+        submit.textContent = 'Submitting...';
+        setMessage(detailsMessage, '');
+
+        try {
+            const details = collectDetails();
+            await submitTransaction(details);
+        } catch (error) {
+            setMessage(detailsMessage, error.message || 'Unable to submit your request.', 'error');
+        } finally {
+            submit.disabled = false;
+            submit.textContent = `Submit ${currentAction.label} Request`;
+        }
+    });
+
+    $all('[data-action-key]').forEach((button) => {
+        button.addEventListener('click', async () => {
+            const action = SITE.actions.find((item) => item.key === button.dataset.actionKey);
+            if (action) {
+                await openModal(action);
+            }
+        });
+    });
+}
+
+function initModelPage() {
+    if (!requirePrivateAccess()) return;
+    const location = requireLocation();
+    if (!location) return;
+
+    const slug = document.body.dataset.modelSlug;
+    const model = getModel(slug);
+    if (!model) {
+        goHome();
+        return;
+    }
+
+    const footer = $('#page-footer');
+    if (footer) {
+        footer.innerHTML = renderFooter();
+    }
+
+    document.title = `Eclipse — ${model.name}`;
+    $('#back-to-gallery').href = `../../${SITE.settings.gallerySlug}/`;
+    $('#hero-image').src = `../../images/${model.slug}/${model.cover}`;
+    $('#hero-image').alt = model.name;
+    $('#hero-name').textContent = model.name;
+    $('#hero-price').textContent = `Starting at ${formatCurrency(model.price)}`;
+    $('#hero-location').textContent = `Available near ${location.label}`;
+    $('#hero-copy').textContent = `${model.name} is currently featured for ${location.city}-area visitors. Explore the gallery below, reveal the concierge contact, request a video call, or submit a booking request at the listed rate.`;
+    $('#meta-location').textContent = location.preciseLabel;
+    $('#meta-zip').textContent = location.zip;
+    $('#meta-gallery-count').textContent = `${model.photos.length} photos`;
+
+    const actionsGrid = $('#actions-grid');
+    actionsGrid.innerHTML = SITE.actions.map((action) => {
+        const price = action.pricing === 'model' ? model.price : action.amount;
+        const actionLabel = action.pricing === 'model' ? `${action.label} ${formatCurrency(model.price)}` : `${action.label} ${formatCurrency(action.amount)}`;
+        return `
+            <article class="action-card">
+                <div class="action-title-row">
+                    <div class="action-title">${escapeHtml(action.label)}</div>
+                    <div class="action-price">${escapeHtml(formatCurrency(price))}</div>
+                </div>
+                <p class="action-copy">${escapeHtml(action.copy)}</p>
+                <button class="action-button" data-action-key="${action.key}">${escapeHtml(actionLabel)}</button>
+            </article>
+        `;
+    }).join('');
+
+    const grid = $('#photo-grid');
+    const photos = model.photos.map((fileName, index) => ({
+        src: `../../images/${model.slug}/${fileName}`,
+        alt: `${model.name} photo ${index + 1}`,
+    }));
+
+    grid.innerHTML = photos.map((photo, index) => `
+        <button class="photo-item" data-photo-index="${index}" aria-label="Open ${escapeHtml(photo.alt)}">
+            <img src="${photo.src}" alt="${escapeHtml(photo.alt)}" loading="lazy">
+        </button>
+    `).join('');
+
+    $all('[data-photo-index]', grid).forEach((button) => {
+        button.addEventListener('click', () => {
+            const index = Number(button.dataset.photoIndex || 0);
+            window.__openLightbox(photos, index);
+        });
+    });
+
+    setupLightbox();
+    initCheckout(model, location);
+}
+
+function initShared() {
+    const footer = $('#page-footer');
+    if (footer && !footer.innerHTML.trim()) {
+        footer.innerHTML = renderFooter();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initShared();
+    const page = document.body.dataset.page;
+    if (page === 'home') initHomePage();
+    if (page === 'gallery') initGalleryPage();
+    if (page === 'model') initModelPage();
+});
+'''
+
+HOME_HTML = '''<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eclipse &mdash; __NAME__</title>
+    <title>Eclipse</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <style>
-        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
-        :root {
-            --bg: #0c0c0c;
-            --card-bg: #141414;
-            --border: #242424;
-            --gold: #c9a455;
-            --gold-light: #e8c978;
-            --text: #ffffff;
-            --muted: #777;
-        }
-
-        html { scroll-behavior: smooth; }
-
-        body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'Montserrat', 'Segoe UI', sans-serif;
-            min-height: 100vh;
-        }
-
-        /* ── NAV ─────────────────────────────────────── */
-        .site-nav {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 1.2rem 2rem;
-            background: rgba(12,12,12,0.88);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border-bottom: 1px solid rgba(36,36,36,0.6);
-        }
-
-        .back-link {
-            color: var(--muted);
-            text-decoration: none;
-            font-size: 0.68rem;
-            letter-spacing: 0.25em;
-            text-transform: uppercase;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            transition: color 0.2s;
-        }
-
-        .back-link:hover { color: var(--gold); }
-
-        .nav-brand {
-            font-family: 'Cormorant Garamond', Georgia, serif;
-            font-size: 1.4rem;
-            font-weight: 300;
-            letter-spacing: 0.4em;
-            padding-right: 0.4em;
-            text-transform: uppercase;
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        .nav-brand em {
-            font-style: normal;
-            color: var(--gold);
-        }
-
-        .nav-spacer { width: 120px; }
-
-        /* ── HERO ─────────────────────────────────────── */
-        .model-hero {
-            position: relative;
-            height: 92vh;
-            min-height: 520px;
-            overflow: hidden;
-            margin-top: 0;
-        }
-
-        .hero-img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            object-position: top center;
-            display: block;
-        }
-
-        .hero-overlay {
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(
-                to bottom,
-                rgba(12,12,12,0.35) 0%,
-                rgba(12,12,12,0.1) 30%,
-                rgba(12,12,12,0.3) 60%,
-                rgba(12,12,12,0.92) 100%
-            );
-        }
-
-        .hero-info {
-            position: absolute;
-            bottom: 3.5rem;
-            left: 0;
-            right: 0;
-            text-align: center;
-            padding: 0 2rem;
-        }
-
-        .hero-name {
-            font-family: 'Cormorant Garamond', Georgia, serif;
-            font-size: clamp(3rem, 10vw, 6.5rem);
-            font-weight: 300;
-            letter-spacing: 0.15em;
-            line-height: 1;
-            color: #fff;
-        }
-
-        .hero-divider {
-            width: 80px;
-            height: 1px;
-            background: linear-gradient(to right, transparent, var(--gold), transparent);
-            margin: 1.4rem auto;
-        }
-
-        .hero-price {
-            font-size: 0.72rem;
-            font-weight: 500;
-            letter-spacing: 0.45em;
-            color: var(--gold);
-            text-transform: uppercase;
-        }
-
-        /* ── GALLERY SECTION ─────────────────────────── */
-        .gallery-section {
-            padding: 5rem 2rem 6rem;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .gallery-header {
-            text-align: center;
-            margin-bottom: 3rem;
-        }
-
-        .gallery-title {
-            font-family: 'Cormorant Garamond', Georgia, serif;
-            font-size: 1.8rem;
-            font-weight: 300;
-            letter-spacing: 0.3em;
-            text-transform: uppercase;
-            color: #fff;
-        }
-
-        .gallery-divider {
-            width: 50px;
-            height: 1px;
-            background: linear-gradient(to right, transparent, var(--gold), transparent);
-            margin: 1rem auto 0;
-        }
-
-        .photo-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 0.75rem;
-        }
-
-        @media (max-width: 768px) {
-            .photo-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-
-        @media (max-width: 480px) {
-            .photo-grid { grid-template-columns: 1fr; }
-        }
-
-        .photo-item {
-            position: relative;
-            overflow: hidden;
-            border-radius: 2px;
-            border: 1px solid var(--border);
-            aspect-ratio: 3/4;
-            cursor: pointer;
-            background: var(--card-bg);
-            transition: border-color 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .photo-item:hover {
-            border-color: var(--gold);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
-        }
-
-        .photo-item img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            object-position: top center;
-            display: block;
-            transition: transform 0.45s ease;
-        }
-
-        .photo-item:hover img {
-            transform: scale(1.06);
-        }
-
-        .photo-item-zoom {
-            position: absolute;
-            inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(0,0,0,0);
-            transition: background 0.3s ease;
-        }
-
-        .photo-item:hover .photo-item-zoom {
-            background: rgba(0,0,0,0.2);
-        }
-
-        .zoom-icon {
-            width: 44px;
-            height: 44px;
-            border: 1px solid rgba(201,164,85,0.7);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--gold);
-            font-size: 1rem;
-            opacity: 0;
-            transition: opacity 0.3s ease, transform 0.3s ease;
-            transform: scale(0.8);
-        }
-
-        .photo-item:hover .zoom-icon {
-            opacity: 1;
-            transform: scale(1);
-        }
-
-        /* ── LIGHTBOX ────────────────────────────────── */
-        .lightbox {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.96);
-            z-index: 9999;
-            align-items: center;
-            justify-content: center;
-            animation: lbFadeIn 0.2s ease;
-        }
-
-        .lightbox.active {
-            display: flex;
-        }
-
-        @keyframes lbFadeIn {
-            from { opacity: 0; }
-            to   { opacity: 1; }
-        }
-
-        .lb-img-wrap {
-            position: relative;
-            max-width: 90vw;
-            max-height: 90vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        #lb-img {
-            max-width: 90vw;
-            max-height: 88vh;
-            object-fit: contain;
-            display: block;
-            border-radius: 2px;
-            box-shadow: 0 30px 80px rgba(0,0,0,0.8);
-        }
-
-        .lb-close {
-            position: fixed;
-            top: 1.5rem;
-            right: 1.5rem;
-            background: none;
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 50%;
-            color: #fff;
-            font-size: 1rem;
-            width: 40px;
-            height: 40px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: border-color 0.2s, color 0.2s;
-            z-index: 10000;
-        }
-
-        .lb-close:hover {
-            border-color: var(--gold);
-            color: var(--gold);
-        }
-
-        .lb-nav-btn {
-            position: fixed;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: 1px solid rgba(255,255,255,0.15);
-            border-radius: 50%;
-            color: #fff;
-            font-size: 1.6rem;
-            width: 52px;
-            height: 52px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: border-color 0.2s, color 0.2s, background 0.2s;
-            z-index: 10000;
-        }
-
-        .lb-nav-btn:hover {
-            border-color: var(--gold);
-            color: var(--gold);
-            background: rgba(201,164,85,0.08);
-        }
-
-        .lb-prev { left: 1.5rem; }
-        .lb-next { right: 1.5rem; }
-
-        .lb-counter {
-            position: fixed;
-            bottom: 1.5rem;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 0.65rem;
-            letter-spacing: 0.3em;
-            color: var(--muted);
-            text-transform: uppercase;
-            z-index: 10000;
-        }
-
-        /* ── FOOTER ──────────────────────────────────── */
-        .site-footer {
-            text-align: center;
-            padding: 2rem;
-            border-top: 1px solid var(--border);
-            font-size: 0.6rem;
-            letter-spacing: 0.25em;
-            color: #2e2e2e;
-            text-transform: uppercase;
-        }
-
-        @media (max-width: 600px) {
-            .site-nav { padding: 1rem 1.2rem; }
-            .hero-info { bottom: 2rem; }
-            .gallery-section { padding: 4rem 1.2rem 5rem; }
-            .lb-prev { left: 0.8rem; }
-            .lb-next { right: 0.8rem; }
-        }
-    </style>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./assets/styles.css">
 </head>
-<body>
+<body data-page="home" data-home-path=".">
+    <main class="center-screen">
+        <section class="access-card">
+            <div class="brand">E<em>C</em>LIPSE</div>
+            <div class="brand-divider"></div>
 
-    <!-- NAV -->
+            <section id="password-step" class="step active">
+                <p class="access-subtitle">Private access required. Enter the site password to continue.</p>
+                <form id="password-form" class="form-stack" autocomplete="off">
+                    <input id="password-input" class="field" type="password" placeholder="Enter Password" aria-label="Password">
+                    <button class="btn" type="submit">Enter Private Site</button>
+                </form>
+                <div id="password-message" class="message-box hidden"></div>
+            </section>
+
+            <section id="zip-step" class="step">
+                <p class="access-subtitle">Access confirmed. Enter your ZIP code so we can show the models available in your area.</p>
+                <form id="zip-form" class="form-stack" autocomplete="off">
+                    <input id="zip-input" class="field" inputmode="numeric" maxlength="5" placeholder="Enter ZIP Code" aria-label="ZIP code">
+                    <button class="btn" type="submit">See Models Near Me</button>
+                </form>
+                <div id="zip-message" class="message-box hidden"></div>
+                <p class="field-hint">We use your ZIP to show an area-specific lineup such as <strong>city, state</strong>.</p>
+            </section>
+        </section>
+    </main>
+
+    <footer id="page-footer" class="footer"></footer>
+
+    <script src="./assets/models-data.js"></script>
+    <script type="module" src="./assets/site.js"></script>
+</body>
+</html>
+'''
+
+GALLERY_HTML = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eclipse — Models</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body data-page="gallery" data-home-path="..">
+    <header class="site-header page-shell">
+        <div class="site-brand">E<em>C</em>LIPSE</div>
+        <div class="header-divider"></div>
+        <p class="site-tagline">Location-matched private lineup</p>
+        <div class="header-actions">
+            <span id="gallery-location" class="location-chip">Available near your area</span>
+        </div>
+    </header>
+
+    <main class="page-shell models-section">
+        <div class="heading-block">
+            <h1 id="gallery-title">Here are the models in your area</h1>
+            <p id="gallery-copy">Loading your local lineup…</p>
+        </div>
+
+        <div class="randomizer-row">
+            <button id="shuffle-models" class="btn" type="button">Shuffle Lineup</button>
+            <button id="change-zip" class="btn-secondary" type="button">Change ZIP</button>
+        </div>
+
+        <section id="gallery-grid" class="models-grid"></section>
+    </main>
+
+    <footer id="page-footer" class="footer"></footer>
+
+    <script src="../assets/models-data.js"></script>
+    <script type="module" src="../assets/site.js"></script>
+</body>
+</html>
+'''
+
+MODEL_HTML_TEMPLATE = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eclipse — {name}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../assets/styles.css">
+</head>
+<body data-page="model" data-home-path="../.." data-model-slug="{slug}">
     <nav class="site-nav">
-        <a href="../../__GALLERY_SLUG__/" class="back-link">&#8592;&nbsp; All Models</a>
+        <a id="back-to-gallery" class="nav-link" href="../../{gallery_slug}/">&#8592; All Models</a>
         <div class="nav-brand">E<em>C</em>LIPSE</div>
         <div class="nav-spacer"></div>
     </nav>
 
-    <!-- HERO -->
-    <div class="model-hero">
-        <img class="hero-img" src="../../images/__SLUG__/1__EXT__" alt="__NAME__">
-        <div class="hero-overlay"></div>
-        <div class="hero-info">
-            <div class="hero-name">__NAME__</div>
-            <div class="hero-divider"></div>
-            <div class="hero-price">Starting at __PRICE__</div>
-        </div>
-    </div>
+    <main class="page-shell">
+        <section class="hero">
+            <div class="hero-grid">
+                <div class="hero-media">
+                    <img id="hero-image" src="../../images/{slug}/{cover}" alt="{name}">
+                </div>
+                <div class="hero-summary">
+                    <div>
+                        <div class="kicker">Private booking preview</div>
+                        <h1 id="hero-name" class="hero-name">{name}</h1>
+                        <div class="brand-divider" style="margin-left:0;margin-right:auto;"></div>
+                        <span id="hero-price" class="price-pill">Starting at {price}</span>
+                    </div>
 
-    <!-- GALLERY -->
-    <section class="gallery-section">
-        <div class="gallery-header">
-            <h2 class="gallery-title">Gallery</h2>
-            <div class="gallery-divider"></div>
-        </div>
-        <div class="photo-grid" id="photo-grid"></div>
-    </section>
+                    <p id="hero-copy" class="hero-copy"></p>
 
-    <footer class="site-footer">
-        &copy; 2026 Eclipse &mdash; Private Access Only<br>
-        <a href="http://t.me/leon_ytwolf" target="_blank" rel="noopener noreferrer" style="color:#c9a455;text-decoration:none;letter-spacing:0.12em;text-transform:none;">Contact on Telegram: @leon_ytwolf</a>
-    </footer>
+                    <div class="meta-grid">
+                        <div class="meta-card">
+                            <div class="meta-label">Area</div>
+                            <div id="meta-location" class="meta-value"></div>
+                        </div>
+                        <div class="meta-card">
+                            <div class="meta-label">ZIP</div>
+                            <div id="meta-zip" class="meta-value"></div>
+                        </div>
+                        <div class="meta-card">
+                            <div class="meta-label">Gallery</div>
+                            <div id="meta-gallery-count" class="meta-value"></div>
+                        </div>
+                    </div>
 
-    <!-- LIGHTBOX -->
-    <div id="lightbox" class="lightbox">
-        <button class="lb-close" id="lb-close">&#10005;</button>
-        <button class="lb-nav-btn lb-prev" id="lb-prev">&#8249;</button>
-        <div class="lb-img-wrap">
-            <img id="lb-img" src="" alt="__NAME__">
-        </div>
-        <button class="lb-nav-btn lb-next" id="lb-next">&#8250;</button>
-        <div class="lb-counter" id="lb-counter"></div>
-    </div>
-
-    <script>
-        // Auth guard — redirect to gallery if not authenticated
-        if (sessionStorage.getItem('eclipse_auth') !== 'true') {
-            window.location.replace('../../__GALLERY_SLUG__/');
-        }
-
-        const photos = __PHOTOS_JS__;
-        let current = 0;
-
-        // Build photo grid
-        const grid = document.getElementById('photo-grid');
-        photos.forEach(function(src, i) {
-            const item = document.createElement('div');
-            item.className = 'photo-item';
-
-            const img = document.createElement('img');
-            img.src = src;
-            img.alt = '__NAME__ photo ' + (i + 1);
-            img.loading = 'lazy';
-
-            const overlay = document.createElement('div');
-            overlay.className = 'photo-item-zoom';
-            overlay.innerHTML = '<div class="zoom-icon">&#43;</div>';
-
-            item.appendChild(img);
-            item.appendChild(overlay);
-            item.addEventListener('click', function() { openLb(i); });
-            grid.appendChild(item);
-        });
-
-        // Lightbox
-        const lb      = document.getElementById('lightbox');
-        const lbImg   = document.getElementById('lb-img');
-        const lbCnt   = document.getElementById('lb-counter');
-
-        function setPhoto(i) {
-            current = (i + photos.length) % photos.length;
-            lbImg.src = photos[current];
-            lbCnt.textContent = (current + 1) + ' \u2014 ' + photos.length;
-        }
-
-        function openLb(i) {
-            setPhoto(i);
-            lb.classList.add('active');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeLb() {
-            lb.classList.remove('active');
-            document.body.style.overflow = '';
-        }
-
-        document.getElementById('lb-close').addEventListener('click', closeLb);
-        document.getElementById('lb-prev').addEventListener('click', function() { setPhoto(current - 1); });
-        document.getElementById('lb-next').addEventListener('click', function() { setPhoto(current + 1); });
-
-        lb.addEventListener('click', function(e) {
-            if (e.target === lb || e.target.className === 'lb-img-wrap') closeLb();
-        });
-
-        document.addEventListener('keydown', function(e) {
-            if (!lb.classList.contains('active')) return;
-            if (e.key === 'Escape')      closeLb();
-            if (e.key === 'ArrowLeft')   setPhoto(current - 1);
-            if (e.key === 'ArrowRight')  setPhoto(current + 1);
-        });
-    </script>
-</body>
-</html>
-"""
-
-# ── Template: gallery / listing page ─────────────────────────────────────────
-GALLERY_TEMPLATE = """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eclipse \u2014 Models</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <style>
-        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
-        :root {
-            --bg: #0c0c0c;
-            --card-bg: #141414;
-            --border: #242424;
-            --gold: #c9a455;
-            --gold-light: #e8c978;
-            --text: #ffffff;
-            --muted: #777;
-        }
-
-        html { scroll-behavior: smooth; }
-
-        body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'Montserrat', 'Segoe UI', sans-serif;
-            min-height: 100vh;
-        }
-
-        #auth-overlay {
-            position: fixed;
-            inset: 0;
-            background: #0c0c0c;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-        }
-
-        #auth-overlay::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: radial-gradient(ellipse at 50% 40%, #1c1008 0%, #0c0c0c 65%);
-        }
-
-        .auth-box {
-            position: relative;
-            z-index: 1;
-            text-align: center;
-            padding: 3rem 2rem;
-            max-width: 380px;
-            width: 100%;
-            animation: fadeUp 0.8s ease forwards;
-        }
-
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-
-        .auth-brand {
-            font-family: 'Cormorant Garamond', Georgia, serif;
-            font-size: clamp(2.8rem, 10vw, 4.5rem);
-            font-weight: 300;
-            letter-spacing: 0.5em;
-            padding-right: 0.5em;
-            color: #fff;
-            text-transform: uppercase;
-        }
-
-        .auth-brand em { font-style: normal; color: var(--gold); }
-
-        .auth-divider {
-            width: 80px;
-            height: 1px;
-            background: linear-gradient(to right, transparent, var(--gold), transparent);
-            margin: 1.8rem auto;
-        }
-
-        .auth-subtitle {
-            font-size: 0.62rem;
-            letter-spacing: 0.4em;
-            color: var(--muted);
-            text-transform: uppercase;
-            margin-bottom: 2.5rem;
-        }
-
-        #auth-form { display: flex; flex-direction: column; gap: 1rem; }
-
-        #password-input {
-            background: #181818;
-            border: 1px solid var(--border);
-            border-radius: 2px;
-            color: #fff;
-            font-family: 'Montserrat', sans-serif;
-            font-size: 0.8rem;
-            letter-spacing: 0.15em;
-            padding: 1rem 1.2rem;
-            outline: none;
-            text-align: center;
-            transition: border-color 0.2s;
-        }
-
-        #password-input:focus { border-color: var(--gold); }
-        #password-input::placeholder { color: #444; letter-spacing: 0.25em; }
-
-        .auth-btn {
-            background: var(--gold);
-            color: #0c0c0c;
-            border: none;
-            border-radius: 2px;
-            font-family: 'Montserrat', sans-serif;
-            font-size: 0.7rem;
-            font-weight: 600;
-            letter-spacing: 0.35em;
-            padding: 1rem 2rem;
-            text-transform: uppercase;
-            cursor: pointer;
-            transition: background 0.2s, transform 0.1s;
-        }
-
-        .auth-btn:hover { background: var(--gold-light); }
-        .auth-btn:active { transform: scale(0.98); }
-
-        .error-msg {
-            color: #e05252;
-            font-size: 0.68rem;
-            letter-spacing: 0.15em;
-            display: none;
-            margin-top: 0.25rem;
-        }
-
-        #gallery-content { display: none; min-height: 100vh; }
-
-        .site-header {
-            text-align: center;
-            padding: 4rem 2rem 3rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .site-brand {
-            font-family: 'Cormorant Garamond', Georgia, serif;
-            font-size: clamp(2rem, 6vw, 3.5rem);
-            font-weight: 300;
-            letter-spacing: 0.5em;
-            padding-right: 0.5em;
-            text-transform: uppercase;
-        }
-
-        .site-brand em { font-style: normal; color: var(--gold); }
-
-        .site-tagline {
-            font-size: 0.62rem;
-            letter-spacing: 0.4em;
-            color: var(--muted);
-            text-transform: uppercase;
-            margin-top: 1rem;
-        }
-
-        .header-divider {
-            width: 60px;
-            height: 1px;
-            background: linear-gradient(to right, transparent, var(--gold), transparent);
-            margin: 1.5rem auto 0;
-        }
-
-        .models-section {
-            padding: 3rem 2rem 5rem;
-            max-width: 1280px;
-            margin: 0 auto;
-        }
-
-        .models-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 1.5rem;
-        }
-
-        .model-card {
-            position: relative;
-            border-radius: 3px;
-            overflow: hidden;
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            cursor: pointer;
-            text-decoration: none;
-            display: block;
-            aspect-ratio: 3/4;
-            transition: transform 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
-        }
-
-        .model-card:hover {
-            transform: translateY(-6px);
-            border-color: var(--gold);
-            box-shadow: 0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(201,164,85,0.15);
-        }
-
-        .model-card-photo {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            object-position: top center;
-            display: block;
-            transition: transform 0.5s ease;
-        }
-
-        .model-card:hover .model-card-photo { transform: scale(1.05); }
-
-        .model-card-overlay {
-            position: absolute;
-            bottom: 0; left: 0; right: 0;
-            background: linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.5) 50%, transparent 100%);
-            padding: 2.5rem 1.4rem 1.4rem;
-        }
-
-        .model-card-name {
-            font-family: 'Cormorant Garamond', Georgia, serif;
-            font-size: 1.7rem;
-            font-weight: 400;
-            letter-spacing: 0.08em;
-            color: #fff;
-            line-height: 1.1;
-        }
-
-        .model-card-price {
-            font-size: 0.68rem;
-            font-weight: 500;
-            letter-spacing: 0.28em;
-            color: var(--gold);
-            text-transform: uppercase;
-            margin-top: 0.4rem;
-        }
-
-        .model-card-arrow {
-            position: absolute;
-            top: 1.2rem; right: 1.2rem;
-            width: 32px; height: 32px;
-            border: 1px solid rgba(201,164,85,0.4);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.75rem;
-            color: var(--gold);
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .model-card:hover .model-card-arrow { opacity: 1; }
-
-        .site-footer {
-            text-align: center;
-            padding: 2rem;
-            border-top: 1px solid var(--border);
-            font-size: 0.6rem;
-            letter-spacing: 0.25em;
-            color: #2e2e2e;
-            text-transform: uppercase;
-        }
-    </style>
-</head>
-<body>
-
-    <div id="auth-overlay">
-        <div class="auth-box">
-            <div class="auth-brand">E<em>C</em>LIPSE</div>
-            <div class="auth-divider"></div>
-            <p class="auth-subtitle">Private Access Required</p>
-            <p style="margin-top:-1rem;margin-bottom:1.5rem;"><a href="http://t.me/leon_ytwolf" target="_blank" rel="noopener noreferrer" style="color:#c9a455;text-decoration:none;letter-spacing:0.12em;text-transform:none;font-size:0.72rem;">Contact on Telegram: @leon_ytwolf</a></p>
-            <form id="auth-form" autocomplete="off">
-                <input type="password" id="password-input" placeholder="Enter Password" />
-                <button type="submit" class="auth-btn">Enter</button>
-                <p class="error-msg" id="error-msg">&#10005; &nbsp;Incorrect password. Please try again.</p>
-            </form>
-        </div>
-    </div>
-
-    <div id="gallery-content">
-        <header class="site-header">
-            <div class="site-brand">E<em>C</em>LIPSE</div>
-            <div class="header-divider"></div>
-            <p class="site-tagline">Our Models</p>
-        </header>
-        <section class="models-section">
-            <div class="models-grid">
-__CARDS__
+                    <span id="hero-location" class="location-chip">Available near your area</span>
+                </div>
             </div>
         </section>
-        <footer class="site-footer">
-            &copy; 2026 Eclipse &mdash; Private Access Only<br>
-            <a href="http://t.me/leon_ytwolf" target="_blank" rel="noopener noreferrer" style="color:#c9a455;text-decoration:none;letter-spacing:0.12em;text-transform:none;">Contact on Telegram: @leon_ytwolf</a>
-        </footer>
+
+        <section class="actions-section">
+            <h2 class="section-title">Request Access</h2>
+            <p class="section-subtitle">Each action submits an anonymous request into the shared Circovault Supabase transaction database. No sign-in is required, and this site does <strong>not</strong> collect raw card numbers or CVV codes.</p>
+            <div id="actions-grid" class="actions-grid"></div>
+        </section>
+
+        <section class="gallery-section">
+            <h2 class="section-title">Gallery</h2>
+            <p class="section-subtitle">Browse the full set before you reveal contact details, request a video call, or submit a booking request.</p>
+            <div class="gallery-panel">
+                <div id="photo-grid" class="photo-grid"></div>
+            </div>
+        </section>
+    </main>
+
+    <footer id="page-footer" class="footer"></footer>
+
+    <div id="checkout-modal" class="modal" aria-hidden="true">
+        <div class="checkout-panel">
+            <button id="checkout-close" class="close-button" type="button" aria-label="Close">&#10005;</button>
+            <h2 class="modal-title">Secure Request</h2>
+            <p class="section-subtitle" style="text-align:left;margin:0.6rem 0 0;">No account is required. Enter the request details below and the site will submit them anonymously into the shared Circovault Supabase transaction database.</p>
+
+            <div class="checkout-summary">
+                <div class="summary-card">
+                    <div class="summary-label">Model</div>
+                    <div id="checkout-model" class="summary-value"></div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Action</div>
+                    <div id="checkout-action" class="summary-value"></div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Total</div>
+                    <div id="checkout-total" class="summary-value"></div>
+                </div>
+            </div>
+
+            <div class="message-box info" style="margin-top:1rem;">
+                Current location: <span id="checkout-location"></span>
+            </div>
+
+            <section class="step-panel" data-step="details">
+                <div class="step-heading">Step 1 — Booking Details</div>
+                <div class="message-box info">This request is submitted anonymously. Enter the best contact and area details so the transaction record is as complete as possible.</div>
+                <form id="details-form" class="form-stack">
+                    <div class="form-grid">
+                        <input id="billing-name" class="field" type="text" placeholder="Full name" required>
+                        <input id="billing-email" class="field" type="email" placeholder="Email address" required>
+                    </div>
+                    <input id="billing-address" class="field" type="text" placeholder="Street address (optional)">
+                    <div class="form-grid">
+                        <input id="billing-city" class="field" type="text" placeholder="City" required>
+                        <input id="billing-state" class="field" type="text" placeholder="State" required>
+                    </div>
+                    <div class="form-grid">
+                        <input id="billing-zip" class="field" type="text" placeholder="ZIP code" required>
+                        <input id="billing-country" class="field" type="text" placeholder="Country" value="US">
+                    </div>
+                    <textarea id="billing-notes" class="field" placeholder="Notes, preferred time, Telegram username, or booking details (optional)"></textarea>
+                    <div id="details-message" class="message-box hidden"></div>
+                    <div class="checkout-actions">
+                        <button id="checkout-button" class="btn" type="submit">Submit Request</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="step-panel" data-step="success" hidden>
+                <div class="step-heading">Step 2 — Request Submitted</div>
+                <div id="success-message" class="message-box success hidden"></div>
+                <div id="reveal-card" class="reveal-card hidden">
+                    <h4>Concierge Contact Revealed</h4>
+                    <a id="reveal-link" href="{contact_url}" target="_blank" rel="noopener noreferrer">{contact_label}</a>
+                </div>
+                <div class="checkout-actions">
+                    <button id="success-close" class="btn" type="button">Done</button>
+                </div>
+            </section>
+        </div>
     </div>
 
-    <script>
-        const PASSWORD = '__PASSWORD__';
-        const overlay  = document.getElementById('auth-overlay');
-        const content  = document.getElementById('gallery-content');
-        const form     = document.getElementById('auth-form');
-        const input    = document.getElementById('password-input');
-        const errorMsg = document.getElementById('error-msg');
+    <div id="lightbox" class="lightbox" aria-hidden="true">
+        <button id="lightbox-close" class="lightbox-close" type="button" aria-label="Close">&#10005;</button>
+        <button id="lightbox-prev" class="lightbox-nav prev" type="button" aria-label="Previous">&#8249;</button>
+        <div class="lightbox-content">
+            <img id="lightbox-image" class="lightbox-image" src="" alt="">
+        </div>
+        <button id="lightbox-next" class="lightbox-nav next" type="button" aria-label="Next">&#8250;</button>
+        <div id="lightbox-counter" class="lightbox-counter"></div>
+    </div>
 
-        function unlock() {
-            sessionStorage.setItem('eclipse_auth', 'true');
-            overlay.style.display = 'none';
-            content.style.display = 'block';
-        }
-
-        if (sessionStorage.getItem('eclipse_auth') === 'true') { unlock(); }
-
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            if (input.value === PASSWORD) {
-                unlock();
-            } else {
-                errorMsg.style.display = 'block';
-                input.value = '';
-                input.focus();
-                input.style.borderColor = '#e05252';
-                setTimeout(() => { input.style.borderColor = ''; }, 1500);
-            }
-        });
-    </script>
+    <script src="../../assets/models-data.js"></script>
+    <script type="module" src="../../assets/site.js"></script>
 </body>
 </html>
-"""
+'''
 
 
-def generate_model_page(slug, name, price, count, ext, gallery_slug):
-    """Generate an individual model page and write it to disk."""
-    price_fmt = "${:,}".format(price)
-    photos_js = json.dumps(["../../images/{}/{}{}".format(slug, i, ext) for i in range(1, count + 1)])
-
-    html = MODEL_TEMPLATE
-    html = html.replace("__NAME__",         name)
-    html = html.replace("__PRICE__",        price_fmt)
-    html = html.replace("__SLUG__",         slug)
-    html = html.replace("__EXT__",          ext)
-    html = html.replace("__PHOTOS_JS__",    photos_js)
-    html = html.replace("__GALLERY_SLUG__", gallery_slug)
-
-    path = "{}/models/{}/index.html".format(BASE, slug)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as f:
-        f.write(html)
-    print("  Generated model page: {}/models/{}/".format(BASE, slug))
+def slugify(value: str) -> str:
+    lowered = value.strip().lower()
+    lowered = re.sub(r"[^a-z0-9]+", "", lowered)
+    return lowered
 
 
-def generate_gallery_page(gallery_slug, page_models):
-    """Generate a gallery/listing page for the given models."""
-    cards_html = ""
-    for slug, name, price, ext in page_models:
-        price_str = "${:,}".format(price)
-        cards_html += (
-            "\n                <!-- {name} -->"
-            "\n                <a class=\"model-card\" href=\"../models/{slug}/\">"
-            "\n                    <img class=\"model-card-photo\" src=\"../images/{slug}/1{ext}\" alt=\"{name}\" loading=\"lazy\">"
-            "\n                    <div class=\"model-card-overlay\">"
-            "\n                        <div class=\"model-card-name\">{name}</div>"
-            "\n                        <div class=\"model-card-price\">From {price}</div>"
-            "\n                    </div>"
-            "\n                    <div class=\"model-card-arrow\">&#8599;</div>"
-            "\n                </a>"
-        ).format(name=name, slug=slug, price=price_str, ext=ext)
-
-    html = GALLERY_TEMPLATE
-    html = html.replace("__CARDS__",    cards_html)
-    html = html.replace("__PASSWORD__", PASSWORD)
-
-    gallery_dir  = "{}/{}".format(BASE, gallery_slug)
-    gallery_path = "{}/index.html".format(gallery_dir)
-    os.makedirs(gallery_dir, exist_ok=True)
-    with open(gallery_path, "w") as f:
-        f.write(html)
-    print("\nGallery page created: {}/".format(gallery_slug))
-    print("  -> {}\n".format(gallery_path))
+def display_name(slug: str) -> str:
+    if slug in DISPLAY_OVERRIDES:
+        return DISPLAY_OVERRIDES[slug]
+    cleaned = re.sub(r"([a-z])([A-Z])", r"\1 \2", slug)
+    return title_case_words(cleaned.replace("-", " "))
 
 
-# ═══════════════════════════════════════════════════════
-#  Interactive prompts
-# ═══════════════════════════════════════════════════════
-print("=" * 52)
-print("  Eclipse \u2014 Page Generator")
-print("=" * 52)
+def title_case_words(value: str) -> str:
+    return " ".join(part.capitalize() for part in value.split())
 
-gallery_slug = sanitize_slug(input("\nPage name (e.g. 'vip' \u2192 domain.com/vip): "))
-if not gallery_slug:
-    print("No page name entered. Exiting.")
-    exit(1)
 
-raw_input = input("Models to include (comma-separated image folder names): ").strip()
-if not raw_input:
-    print("No models specified. Exiting.")
-    exit(1)
+def random_price(slug: str) -> int:
+    digest = hashlib.sha256(slug.encode("utf-8")).hexdigest()
+    steps = ((3500 - 700) // 100) + 1
+    index = int(digest[:8], 16) % steps
+    return 700 + (index * 100)
 
-# Resolve model data; prompt for unknowns
-print()
-page_models  = []  # (slug, name, price, ext) for gallery cards
-new_models   = []  # new models that also need individual pages
 
-for slug_raw in raw_input.split(","):
-    slug = sanitize_slug(slug_raw)
-    if not slug:
-        continue
-    if slug in model_lookup:
-        name, price, count = model_lookup[slug]
-        page_models.append((slug, name, price, ".jpeg"))
-    else:
-        img_dir = find_image_folder(slug)
-        if img_dir is None:
-            print("  WARNING: images/{} not found \u2014 skipping.".format(slug))
+def normalize_external_models() -> None:
+    if not EXTERNAL_MODELS_DIR.exists():
+        return
+
+    existing = {path.name for path in IMAGES_DIR.iterdir() if path.is_dir()}
+
+    for source_dir in sorted(EXTERNAL_MODELS_DIR.iterdir()):
+        if not source_dir.is_dir():
             continue
-        print("  New model '{}' \u2014 enter details:".format(slug))
-        name  = input("    Display name: ").strip()
-        price = int(input("    Starting price ($ numbers only): ").strip())
-        count, ext = prepare_images(img_dir, slug)
-        print("    Auto-detected {} photo(s) in images/{}/".format(count, slug))
-        page_models.append((slug, name, price, ext))
-        new_models.append((slug, name, price, count, ext))
 
-if not page_models:
-    print("No valid models resolved. Exiting.")
-    exit(1)
+        slug = slugify(source_dir.name)
+        if not slug or slug in existing:
+            continue
 
-# Generate individual pages for any new (unknown) models
-if new_models:
-    print("Generating individual pages for new models...")
-    for slug, name, price, count, ext in new_models:
-        generate_model_page(slug, name, price, count, ext, gallery_slug)
+        photos = sorted(
+            [path for path in source_dir.iterdir() if path.is_file() and path.suffix.lower() in IMAGE_EXTS],
+            key=lambda path: path.name.lower(),
+        )
+        if not photos:
+            continue
 
-# Generate the gallery page
-generate_gallery_page(gallery_slug, page_models)
-print("Done!")
+        target_dir = IMAGES_DIR / slug
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        for index, photo in enumerate(photos, start=1):
+            target_path = target_dir / f"{index}.jpeg"
+            shutil.copy2(photo, target_path)
+
+        existing.add(slug)
+
+
+def collect_models() -> list[dict]:
+    models = []
+
+    for image_dir in sorted(IMAGES_DIR.iterdir(), key=lambda path: path.name.lower()):
+        if not image_dir.is_dir():
+            continue
+
+        photos = sorted(
+            [path.name for path in image_dir.iterdir() if path.is_file() and path.suffix.lower() in IMAGE_EXTS],
+            key=lambda name: (
+                int(Path(name).stem) if Path(name).stem.isdigit() else 9999,
+                name.lower(),
+            ),
+        )
+
+        if not photos:
+            continue
+
+        slug = image_dir.name
+        models.append(
+            {
+                "slug": slug,
+                "name": display_name(slug),
+                "price": PRICE_OVERRIDES.get(slug, random_price(slug)),
+                "cover": photos[0],
+                "photos": photos,
+            }
+        )
+
+    return sorted(models, key=lambda item: item["name"].lower())
+
+
+def write_shared_assets(models: list[dict]) -> None:
+    ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+
+    site_data = {
+        "settings": {
+            "password": PASSWORD,
+            "gallerySlug": GALLERY_SLUG,
+            "rootPath": ".",
+            "contactUrl": CONTACT_URL,
+            "contactLabel": CONTACT_LABEL,
+            "checkoutEndpoint": CHECKOUT_ENDPOINT,
+        },
+        "actions": [
+            {
+                "key": "reveal_contact",
+                "label": "Reveal Contact",
+                "amount": 5,
+                "pricing": "fixed",
+                "copy": "Unlock the concierge contact attached to this profile so the visitor can continue the conversation privately.",
+            },
+            {
+                "key": "video_call",
+                "label": "Video Call",
+                "amount": 150,
+                "pricing": "fixed",
+                "copy": "Submit a paid request for a private video call introduction tied to this model profile.",
+            },
+            {
+                "key": "book_model",
+                "label": "Book Model",
+                "amount": 0,
+                "pricing": "model",
+                "copy": "Log a booking request at the model\'s listed rate using the shared Supabase transactions database.",
+            },
+        ],
+        "models": models,
+    }
+
+    (ASSETS_DIR / "styles.css").write_text(STYLE_CSS.strip() + "\n", encoding="utf-8")
+    (ASSETS_DIR / "site.js").write_text(SITE_JS.strip() + "\n", encoding="utf-8")
+    (ASSETS_DIR / "models-data.js").write_text(
+        "window.ECLIPSE_SITE_DATA = " + json.dumps(site_data, indent=2) + ";\n",
+        encoding="utf-8",
+    )
+
+
+def write_pages(models: list[dict]) -> None:
+    HOME_PATH.write_text(HOME_HTML, encoding="utf-8")
+    GALLERY_DIR.mkdir(parents=True, exist_ok=True)
+    (GALLERY_DIR / "index.html").write_text(GALLERY_HTML, encoding="utf-8")
+
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    for model in models:
+        model_dir = MODELS_DIR / model["slug"]
+        model_dir.mkdir(parents=True, exist_ok=True)
+        model_html = MODEL_HTML_TEMPLATE.format(
+            name=model["name"],
+            slug=model["slug"],
+            cover=model["cover"],
+            price=f"${model['price']:,}",
+            gallery_slug=GALLERY_SLUG,
+            contact_url=CONTACT_URL,
+            contact_label=CONTACT_LABEL,
+        )
+        (model_dir / "index.html").write_text(model_html, encoding="utf-8")
+
+
+def main() -> None:
+    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    normalize_external_models()
+    models = collect_models()
+    write_shared_assets(models)
+    write_pages(models)
+    print(f"Built {len(models)} model profiles.")
+
+
+if __name__ == "__main__":
+    main()
