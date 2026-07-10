@@ -118,7 +118,38 @@ function buildRandomSelection() {
     const min = Math.min(8, SITE.models.length);
     const max = Math.min(14, SITE.models.length);
     const count = SITE.models.length <= min ? SITE.models.length : randomInt(min, max);
-    const selection = shuffle(SITE.models).slice(0, count).map((model) => model.slug);
+
+    if (SITE.models.length <= 3) {
+        const simpleSelection = shuffle(SITE.models).slice(0, count).map((model) => model.slug);
+        setSelection(simpleSelection);
+        return simpleSelection;
+    }
+
+    const sorted = [...SITE.models].sort((a, b) => a.price - b.price);
+    const third = Math.max(1, Math.floor(sorted.length / 3));
+    const lowPool = sorted.slice(0, third);
+    const midPool = sorted.slice(third, Math.max(third * 2, third + 1));
+    const highPool = sorted.slice(Math.max(third * 2, third + 1));
+
+    const selected = [];
+    const used = new Set();
+
+    [lowPool, midPool, highPool].forEach((pool) => {
+        const available = shuffle(pool).find((model) => !used.has(model.slug));
+        if (available && selected.length < count) {
+            selected.push(available);
+            used.add(available.slug);
+        }
+    });
+
+    const remaining = shuffle(sorted.filter((model) => !used.has(model.slug)));
+    for (const model of remaining) {
+        if (selected.length >= count) break;
+        selected.push(model);
+        used.add(model.slug);
+    }
+
+    const selection = shuffle(selected).map((model) => model.slug);
     setSelection(selection);
     return selection;
 }
@@ -268,7 +299,7 @@ function initGalleryPage() {
 
     locationLabel.textContent = `Available near ${location.label}`;
     title.textContent = `Here are the models in your area — ${location.label}`;
-    copy.textContent = `We matched this lineup using ZIP code ${location.zip}. Because the site is curated dynamically, you’ll see a fresh mix of ${location.city}-area availability each session.`;
+    copy.textContent = `We matched this lineup using ZIP code ${location.zip}.`;
 
     function renderSelection() {
         const slugs = getSelection().length ? getSelection() : buildRandomSelection();

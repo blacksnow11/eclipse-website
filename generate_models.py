@@ -668,6 +668,10 @@ textarea.field::placeholder {
     letter-spacing: 0.1em;
 }
 
+.section-title-small {
+    font-size: clamp(1.45rem, 3vw, 2.1rem);
+}
+
 .section-subtitle {
     text-align: center;
     color: var(--muted);
@@ -1151,7 +1155,38 @@ function buildRandomSelection() {
     const min = Math.min(8, SITE.models.length);
     const max = Math.min(14, SITE.models.length);
     const count = SITE.models.length <= min ? SITE.models.length : randomInt(min, max);
-    const selection = shuffle(SITE.models).slice(0, count).map((model) => model.slug);
+
+    if (SITE.models.length <= 3) {
+        const simpleSelection = shuffle(SITE.models).slice(0, count).map((model) => model.slug);
+        setSelection(simpleSelection);
+        return simpleSelection;
+    }
+
+    const sorted = [...SITE.models].sort((a, b) => a.price - b.price);
+    const third = Math.max(1, Math.floor(sorted.length / 3));
+    const lowPool = sorted.slice(0, third);
+    const midPool = sorted.slice(third, Math.max(third * 2, third + 1));
+    const highPool = sorted.slice(Math.max(third * 2, third + 1));
+
+    const selected = [];
+    const used = new Set();
+
+    [lowPool, midPool, highPool].forEach((pool) => {
+        const available = shuffle(pool).find((model) => !used.has(model.slug));
+        if (available && selected.length < count) {
+            selected.push(available);
+            used.add(available.slug);
+        }
+    });
+
+    const remaining = shuffle(sorted.filter((model) => !used.has(model.slug)));
+    for (const model of remaining) {
+        if (selected.length >= count) break;
+        selected.push(model);
+        used.add(model.slug);
+    }
+
+    const selection = shuffle(selected).map((model) => model.slug);
     setSelection(selection);
     return selection;
 }
@@ -1301,7 +1336,7 @@ function initGalleryPage() {
 
     locationLabel.textContent = `Available near ${location.label}`;
     title.textContent = `Here are the models in your area — ${location.label}`;
-    copy.textContent = `We matched this lineup using ZIP code ${location.zip}. Because the site is curated dynamically, you’ll see a fresh mix of ${location.city}-area availability each session.`;
+    copy.textContent = `We matched this lineup using ZIP code ${location.zip}.`;
 
     function renderSelection() {
         const slugs = getSelection().length ? getSelection() : buildRandomSelection();
@@ -1773,18 +1808,17 @@ MODEL_HTML_TEMPLATE = '''<!DOCTYPE html>
             </div>
         </section>
 
-        <section class="actions-section">
-            <h2 class="section-title">Request Access</h2>
-            <p class="section-subtitle">Each action now follows the same purchase-style payment flow used in Circovault: payment details, billing address, and a pending transaction record written to the shared Supabase database.</p>
-            <div id="actions-grid" class="actions-grid"></div>
-        </section>
-
         <section class="gallery-section">
             <h2 class="section-title">Gallery</h2>
             <p class="section-subtitle">Browse the full set before you reveal contact details, request a video call, or submit a booking request.</p>
             <div class="gallery-panel">
                 <div id="photo-grid" class="photo-grid"></div>
             </div>
+        </section>
+
+        <section class="actions-section">
+            <h2 class="section-title section-title-small">Request Access</h2>
+            <div id="actions-grid" class="actions-grid"></div>
         </section>
     </main>
 
@@ -2017,21 +2051,21 @@ def write_shared_assets(models: list[dict]) -> None:
                 "label": "Reveal Contact",
                 "amount": 5,
                 "pricing": "fixed",
-                "copy": "Unlock the concierge contact attached to this profile so the visitor can continue the conversation privately.",
+                "copy": "Unlock the concierge contact attached to this profile so that you can continue the conversation privately.",
             },
             {
                 "key": "video_call",
                 "label": "Video Call",
                 "amount": 150,
                 "pricing": "fixed",
-                "copy": "Submit a paid request for a private video call introduction tied to this model profile.",
+                "copy": "Submit a paid request for a private video call session.",
             },
             {
                 "key": "book_model",
                 "label": "Book Model",
                 "amount": 0,
                 "pricing": "model",
-                "copy": "Log a booking request at the model\'s listed rate using the shared Supabase transactions database.",
+                "copy": "Log a booking request at the model\'s listed rate.",
             },
         ],
         "models": models,

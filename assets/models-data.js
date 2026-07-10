@@ -13,21 +13,21 @@ window.ECLIPSE_SITE_DATA = {
       "label": "Reveal Contact",
       "amount": 5,
       "pricing": "fixed",
-      "copy": "Unlock the concierge contact attached to this profile so the visitor can continue the conversation privately."
+      "copy": "Unlock the concierge contact attached to this profile so that you can continue the conversation privately."
     },
     {
       "key": "video_call",
       "label": "Video Call",
       "amount": 150,
       "pricing": "fixed",
-      "copy": "Submit a paid request for a private video call introduction tied to this model profile."
+      "copy": "Submit a paid request for a private video call session."
     },
     {
       "key": "book_model",
       "label": "Book Model",
       "amount": 0,
       "pricing": "model",
-      "copy": "Log a booking request at the model's listed rate using the shared Supabase transactions database."
+      "copy": "Log a booking request at the model's listed rate."
     }
   ],
   "models": [
