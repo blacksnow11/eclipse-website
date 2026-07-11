@@ -589,6 +589,20 @@ function initModelPage() {
         `;
     }).join('');
 
+    const heroQuickActions = $('#hero-quick-actions');
+    heroQuickActions.innerHTML = SITE.actions.map((action) => {
+        const price = action.pricing === 'model' ? model.price : action.amount;
+        return `
+            <button class="quick-action-button" data-action-key="${action.key}">
+                <span class="quick-action-top">
+                    <span class="quick-action-name">${escapeHtml(action.label)}</span>
+                    <span class="quick-action-price">${escapeHtml(formatCurrency(price))}</span>
+                </span>
+                <span class="quick-action-caption">Tap to open this request immediately.</span>
+            </button>
+        `;
+    }).join('');
+
     const grid = $('#photo-grid');
     const photos = model.photos.map((fileName, index) => ({
         src: `../../images/${model.slug}/${fileName}`,

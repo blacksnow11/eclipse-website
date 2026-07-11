@@ -630,6 +630,78 @@ textarea.field::placeholder {
     font-size: 0.72rem;
 }
 
+.hero-quick-booking {
+    padding: 1rem;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.hero-quick-booking-title {
+    font-size: 0.72rem;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    margin-bottom: 0.85rem;
+}
+
+.hero-quick-booking-copy {
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.65;
+    margin-bottom: 0.95rem;
+}
+
+.hero-quick-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.7rem;
+}
+
+.quick-action-button {
+    width: 100%;
+    text-align: left;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text);
+    padding: 0.95rem 1rem;
+    border-radius: 18px;
+    transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+
+.quick-action-button:hover {
+    border-color: rgba(201, 164, 85, 0.5);
+    background: rgba(201, 164, 85, 0.08);
+    transform: translateY(-1px);
+}
+
+.quick-action-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.quick-action-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.quick-action-price {
+    color: var(--gold-light);
+    font-size: 0.76rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.quick-action-caption {
+    margin-top: 0.35rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.55;
+}
+
 .meta-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1626,6 +1698,20 @@ function initModelPage() {
         `;
     }).join('');
 
+    const heroQuickActions = $('#hero-quick-actions');
+    heroQuickActions.innerHTML = SITE.actions.map((action) => {
+        const price = action.pricing === 'model' ? model.price : action.amount;
+        return `
+            <button class="quick-action-button" data-action-key="${action.key}">
+                <span class="quick-action-top">
+                    <span class="quick-action-name">${escapeHtml(action.label)}</span>
+                    <span class="quick-action-price">${escapeHtml(formatCurrency(price))}</span>
+                </span>
+                <span class="quick-action-caption">Tap to open this request immediately.</span>
+            </button>
+        `;
+    }).join('');
+
     const grid = $('#photo-grid');
     const photos = model.photos.map((fileName, index) => ({
         src: `../../images/${model.slug}/${fileName}`,
@@ -1787,6 +1873,12 @@ MODEL_HTML_TEMPLATE = '''<!DOCTYPE html>
                     </div>
 
                     <p id="hero-copy" class="hero-copy"></p>
+
+                    <div class="hero-quick-booking">
+                        <div class="hero-quick-booking-title">Quick Access</div>
+                        <p class="hero-quick-booking-copy">If you already know what you want, use one of the options below. The full Request Access section remains further down the page.</p>
+                        <div id="hero-quick-actions" class="hero-quick-actions"></div>
+                    </div>
 
                     <div class="meta-grid">
                         <div class="meta-card">
