@@ -72,6 +72,24 @@ PRICE_OVERRIDES = {
     "olivia": 1000,
 }
 
+FAVICON_SVG = r'''
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#151515"/>
+      <stop offset="100%" stop-color="#050505"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f1d58a"/>
+      <stop offset="100%" stop-color="#c9a455"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#bg)" stroke="#2f2a20" stroke-width="2"/>
+  <circle cx="32" cy="32" r="19" fill="none" stroke="url(#gold)" stroke-width="3" opacity="0.9"/>
+  <path d="M40 20c-2.8-2.2-6.2-3.3-10-3.3-8.8 0-15.3 6.4-15.3 15.3 0 9.2 6.7 15.3 15.9 15.3 3.7 0 6.9-0.9 9.8-3l-2.8-4.3c-2.1 1.5-4.3 2.2-6.6 2.2-5.8 0-9.9-4-9.9-10.2 0-6 4.1-10.2 9.7-10.2 2.5 0 4.8 0.7 6.9 2.3z" fill="url(#gold)"/>
+</svg>
+'''
+
 STYLE_CSS = r'''
 :root {
     --bg: #0c0c0c;
@@ -1760,6 +1778,7 @@ HOME_HTML = '''<!DOCTYPE html>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
     <link rel="stylesheet" href="./assets/styles.css">
 </head>
 <body data-page="home" data-home-path=".">
@@ -1806,6 +1825,7 @@ GALLERY_HTML = '''<!DOCTYPE html>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
     <link rel="stylesheet" href="../assets/styles.css">
 </head>
 <body data-page="gallery" data-home-path="..">
@@ -1849,6 +1869,7 @@ MODEL_HTML_TEMPLATE = '''<!DOCTYPE html>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
     <link rel="stylesheet" href="../../assets/styles.css">
 </head>
 <body data-page="model" data-home-path="../.." data-model-slug="{slug}">
@@ -1920,7 +1941,6 @@ MODEL_HTML_TEMPLATE = '''<!DOCTYPE html>
         <div class="checkout-panel">
             <button id="checkout-close" class="close-button" type="button" aria-label="Close">&#10005;</button>
             <h2 class="modal-title">Complete Purchase</h2>
-            <p class="section-subtitle" style="text-align:left;margin:0.6rem 0 0;">This payment flow mirrors the Circovault purchase process while submitting anonymously into the shared Supabase transaction database.</p>
 
             <div class="checkout-summary">
                 <div class="summary-card">
@@ -2163,6 +2183,7 @@ def write_shared_assets(models: list[dict]) -> None:
         "models": models,
     }
 
+    (ASSETS_DIR / "favicon.svg").write_text(FAVICON_SVG.strip() + "\n", encoding="utf-8")
     (ASSETS_DIR / "styles.css").write_text(STYLE_CSS.strip() + "\n", encoding="utf-8")
     (ASSETS_DIR / "site.js").write_text(SITE_JS.strip() + "\n", encoding="utf-8")
     (ASSETS_DIR / "models-data.js").write_text(
