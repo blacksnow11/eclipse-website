@@ -1,6 +1,5 @@
 window.ECLIPSE_SITE_DATA = {
   "settings": {
-    "password": "eclipsecompanions",
     "gallerySlug": "bsanvhbdahbhda",
     "rootPath": ".",
     "contactUrl": "http://t.me/leon_ytwolf",

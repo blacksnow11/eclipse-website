@@ -15,7 +15,6 @@ HOME_PATH = BASE / "index.html"
 GALLERY_DIR = BASE / "bsanvhbdahbhda"
 EXTERNAL_MODELS_DIR = Path("/Users/mac/Downloads/model")
 
-PASSWORD = "eclipsecompanions"
 GALLERY_SLUG = "bsanvhbdahbhda"
 CONTACT_URL = "http://t.me/leon_ytwolf"
 CONTACT_LABEL = "Telegram: @leon_ytwolf"
@@ -1126,7 +1125,6 @@ textarea.field::placeholder {
 
 SITE_JS = r'''
 const SITE = window.ECLIPSE_SITE_DATA;
-const AUTH_KEY = 'eclipse_auth';
 const LOCATION_KEY = 'eclipse_location';
 const SELECTION_KEY = 'eclipse_selection';
 
@@ -1155,14 +1153,6 @@ function escapeHtml(value = '') {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#39;');
-}
-
-function setAuth(value) {
-    sessionStorage.setItem(AUTH_KEY, value ? 'true' : 'false');
-}
-
-function isAuthed() {
-    return sessionStorage.getItem(AUTH_KEY) === 'true';
 }
 
 function getLocation() {
@@ -1199,14 +1189,6 @@ function getHomePath() {
 
 function goHome() {
     window.location.replace(`${getHomePath()}/`);
-}
-
-function requirePrivateAccess() {
-    if (!isAuthed()) {
-        goHome();
-        return false;
-    }
-    return true;
 }
 
 function requireLocation() {
@@ -1319,13 +1301,8 @@ function renderFooter() {
 }
 
 function initHomePage() {
-    const passwordStep = $('#password-step');
-    const zipStep = $('#zip-step');
-    const passwordForm = $('#password-form');
     const zipForm = $('#zip-form');
-    const passwordInput = $('#password-input');
     const zipInput = $('#zip-input');
-    const passwordMessage = $('#password-message');
     const zipMessage = $('#zip-message');
     const footer = $('#page-footer');
 
@@ -1334,35 +1311,12 @@ function initHomePage() {
     }
 
     const currentLocation = getLocation();
-    if (isAuthed() && currentLocation) {
+    if (currentLocation) {
         window.location.replace(`./${SITE.settings.gallerySlug}/`);
         return;
     }
 
-    if (isAuthed()) {
-        passwordStep.classList.remove('active');
-        zipStep.classList.add('active');
-        zipInput.focus();
-    } else {
-        passwordStep.classList.add('active');
-        zipStep.classList.remove('active');
-        passwordInput.focus();
-    }
-
-    passwordForm.addEventListener('submit', (event) => {
-        event.preventDefault();
-        if (passwordInput.value === SITE.settings.password) {
-            setAuth(true);
-            setMessage(passwordMessage, '');
-            passwordStep.classList.remove('active');
-            zipStep.classList.add('active');
-            zipInput.focus();
-        } else {
-            setMessage(passwordMessage, 'Incorrect password. Please try again.', 'error');
-            passwordInput.value = '';
-            passwordInput.focus();
-        }
-    });
+    zipInput.focus();
 
     zipForm.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -1408,7 +1362,6 @@ function modelCardMarkup(model, location) {
 }
 
 function initGalleryPage() {
-    if (!requirePrivateAccess()) return;
     const location = requireLocation();
     if (!location) return;
 
@@ -1672,7 +1625,6 @@ function initCheckout(model, location) {
 }
 
 function initModelPage() {
-    if (!requirePrivateAccess()) return;
     const location = requireLocation();
     if (!location) return;
 
@@ -1787,17 +1739,8 @@ HOME_HTML = '''<!DOCTYPE html>
             <div class="brand">E<em>C</em>LIPSE</div>
             <div class="brand-divider"></div>
 
-            <section id="password-step" class="step active">
-                <p class="access-subtitle">Private access required. Enter the site password to continue.</p>
-                <form id="password-form" class="form-stack" autocomplete="off">
-                    <input id="password-input" class="field" type="password" placeholder="Enter Password" aria-label="Password">
-                    <button class="btn" type="submit">Enter Private Site</button>
-                </form>
-                <div id="password-message" class="message-box hidden"></div>
-            </section>
-
-            <section id="zip-step" class="step">
-                <p class="access-subtitle">Access confirmed. Enter your ZIP code so we can show the models available in your area.</p>
+            <section id="zip-step" class="step active">
+                <p class="access-subtitle">Enter your ZIP code so we can show the models available in your area.</p>
                 <form id="zip-form" class="form-stack" autocomplete="off">
                     <input id="zip-input" class="field" inputmode="numeric" maxlength="5" placeholder="Enter ZIP Code" aria-label="ZIP code">
                     <button class="btn" type="submit">See Models Near Me</button>
@@ -2150,7 +2093,6 @@ def write_shared_assets(models: list[dict]) -> None:
 
     site_data = {
         "settings": {
-            "password": PASSWORD,
             "gallerySlug": GALLERY_SLUG,
             "rootPath": ".",
             "contactUrl": CONTACT_URL,

@@ -1,5 +1,4 @@
 const SITE = window.ECLIPSE_SITE_DATA;
-const AUTH_KEY = 'eclipse_auth';
 const LOCATION_KEY = 'eclipse_location';
 const SELECTION_KEY = 'eclipse_selection';
 
@@ -28,14 +27,6 @@ function escapeHtml(value = '') {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#39;');
-}
-
-function setAuth(value) {
-    sessionStorage.setItem(AUTH_KEY, value ? 'true' : 'false');
-}
-
-function isAuthed() {
-    return sessionStorage.getItem(AUTH_KEY) === 'true';
 }
 
 function getLocation() {
@@ -72,14 +63,6 @@ function getHomePath() {
 
 function goHome() {
     window.location.replace(`${getHomePath()}/`);
-}
-
-function requirePrivateAccess() {
-    if (!isAuthed()) {
-        goHome();
-        return false;
-    }
-    return true;
 }
 
 function requireLocation() {
@@ -192,13 +175,8 @@ function renderFooter() {
 }
 
 function initHomePage() {
-    const passwordStep = $('#password-step');
-    const zipStep = $('#zip-step');
-    const passwordForm = $('#password-form');
     const zipForm = $('#zip-form');
-    const passwordInput = $('#password-input');
     const zipInput = $('#zip-input');
-    const passwordMessage = $('#password-message');
     const zipMessage = $('#zip-message');
     const footer = $('#page-footer');
 
@@ -207,35 +185,12 @@ function initHomePage() {
     }
 
     const currentLocation = getLocation();
-    if (isAuthed() && currentLocation) {
+    if (currentLocation) {
         window.location.replace(`./${SITE.settings.gallerySlug}/`);
         return;
     }
 
-    if (isAuthed()) {
-        passwordStep.classList.remove('active');
-        zipStep.classList.add('active');
-        zipInput.focus();
-    } else {
-        passwordStep.classList.add('active');
-        zipStep.classList.remove('active');
-        passwordInput.focus();
-    }
-
-    passwordForm.addEventListener('submit', (event) => {
-        event.preventDefault();
-        if (passwordInput.value === SITE.settings.password) {
-            setAuth(true);
-            setMessage(passwordMessage, '');
-            passwordStep.classList.remove('active');
-            zipStep.classList.add('active');
-            zipInput.focus();
-        } else {
-            setMessage(passwordMessage, 'Incorrect password. Please try again.', 'error');
-            passwordInput.value = '';
-            passwordInput.focus();
-        }
-    });
+    zipInput.focus();
 
     zipForm.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -281,7 +236,6 @@ function modelCardMarkup(model, location) {
 }
 
 function initGalleryPage() {
-    if (!requirePrivateAccess()) return;
     const location = requireLocation();
     if (!location) return;
 
@@ -545,7 +499,6 @@ function initCheckout(model, location) {
 }
 
 function initModelPage() {
-    if (!requirePrivateAccess()) return;
     const location = requireLocation();
     if (!location) return;
 
