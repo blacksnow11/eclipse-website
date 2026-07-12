@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eclipse — Tips</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+    <link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body data-page="tips" data-home-path="..">
+    <nav class="site-nav">
+        <a class="nav-link" href="../">&#8592; Home</a>
+        <div class="nav-brand">E<em>C</em>LIPSE</div>
+        <div class="nav-spacer"></div>
+    </nav>
+
+    <main class="center-screen">
+        <section class="checkout-panel tips-page-card">
+            <div class="heading-block" style="margin-bottom:1.6rem;">
+                <h1>Send a Tip</h1>
+                <p>Choose a suggested amount or enter any custom amount you would like to tip.</p>
+            </div>
+
+            <form id="tip-form" class="form-stack" autocomplete="off">
+                <div>
+                    <div class="step-heading" style="margin-bottom:0.75rem;">Choose Tip Amount</div>
+                    <div class="amount-grid">
+                        <button class="amount-option" type="button" data-tip-amount="100">$100</button>
+                        <button class="amount-option" type="button" data-tip-amount="200">$200</button>
+                        <button class="amount-option" type="button" data-tip-amount="500">$500</button>
+                        <button class="amount-option" type="button" data-tip-amount="1000">$1,000</button>
+                    </div>
+                    <div class="form-stack" style="margin-top:0.9rem;">
+                        <input id="tip-amount" class="field" type="number" min="1" step="1" placeholder="Or enter a custom tip amount" required>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="step-heading" style="margin-bottom:0.65rem;">Payment Information</div>
+                    <div class="form-stack">
+                        <input id="card-number" class="field" type="text" inputmode="numeric" placeholder="Card Number" required>
+                        <div class="form-grid">
+                            <input id="expiry-date" class="field" type="text" placeholder="MM/YY" required>
+                            <input id="cvv" class="field" type="text" inputmode="numeric" placeholder="CVV" required>
+                        </div>
+                        <input id="billing-name" class="field" type="text" placeholder="Cardholder Name" required>
+                        <input id="billing-email" class="field" type="email" placeholder="Email Address" required>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="step-heading" style="margin-bottom:0.65rem;">Billing Address</div>
+                    <div class="form-stack">
+                        <input id="billing-address" class="field" type="text" placeholder="Street Address" required>
+                        <div class="form-grid">
+                            <input id="billing-city" class="field" type="text" placeholder="City" required>
+                            <input id="billing-state" class="field" type="text" placeholder="State/Province" required>
+                        </div>
+                        <div class="form-grid">
+                            <input id="billing-zip" class="field" type="text" placeholder="ZIP/Postal Code" required>
+                            <select id="billing-country" class="field" required>
+                                <option value="">Select Country</option>
+                                <option value="US" selected>United States</option>
+                                <option value="CA">Canada</option>
+                                <option value="GB">United Kingdom</option>
+                                <option value="AU">Australia</option>
+                                <option value="DE">Germany</option>
+                                <option value="FR">France</option>
+                                <option value="IT">Italy</option>
+                                <option value="ES">Spain</option>
+                                <option value="NL">Netherlands</option>
+                                <option value="SE">Sweden</option>
+                                <option value="JP">Japan</option>
+                                <option value="KR">South Korea</option>
+                                <option value="SG">Singapore</option>
+                                <option value="AE">United Arab Emirates</option>
+                            </select>
+                        </div>
+                        <textarea id="tip-notes" class="field" placeholder="Optional note"></textarea>
+                    </div>
+                </div>
+
+                <p class="tips-note">Suggested amounts are optional — you can enter any custom amount you want.</p>
+                <div id="tip-message" class="message-box hidden"></div>
+                <div class="checkout-actions">
+                    <button id="tip-submit" class="btn" type="submit">Send Tip</button>
+                </div>
+            </form>
+        </section>
+    </main>
+
+    <footer id="page-footer" class="footer"></footer>
+
+    <script src="../assets/models-data.js"></script>
+    <script type="module" src="../assets/site.js"></script>
+</body>
+</html>

